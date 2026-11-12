@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>주야간 근무표 생성기</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2f5d50">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="근무표">
+
+<style>
+  :root {
+    --bg: #f6f5f2; --ink: #1f2622; --line: #d8d4cb; --accent: #2f5d50; --accent-soft: #e4ede9;
+    --day: #f0e9d8; --night: #e3e8ef; --extra: #f4dede; --off-week: #f9f8f6; --vac: #fde8d8; --hol: #e6dff5;
+    --hl: #fff2a8;
+    color-scheme: light;
+  }
+  input, select, textarea { color: var(--ink); -webkit-text-fill-color: var(--ink); }
+  .field input, .field select { background-color: #fff; }
+  .row-main input[type=text] { border-bottom: 1px dashed var(--line) !important; }
+  .row-main input[type=text]::placeholder { color: #a3a8a3; -webkit-text-fill-color: #a3a8a3; }
+  body.loading .wrap > .panel { pointer-events: none; opacity: .45; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif; padding: 24px 16px 60px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: #6b6f6a; font-size: 13px; margin-bottom: 20px; }
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 20px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--accent); }
+  .roster-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .roster-row { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .row-main { display: flex; align-items: center; gap: 8px; padding: 7px 9px; }
+  .row-main .tag { width: 22px; height: 22px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
+  .row-main input[type=text] { flex: 1; min-width: 0; border: none; font-size: 13px; padding: 4px 2px; background: transparent; }
+  .row-main input[type=text]:focus { outline: none; border-bottom: 1px solid var(--accent); }
+  .badges { display: flex; gap: 4px; flex-shrink: 0; }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap; }
+  .badge.day { background: #eee3cf; color: #8a6d1f; }
+  .badge.night { background: #dde3ea; color: #3f5877; }
+  .badge.hl { background: var(--hl); color: #7a6300; }
+  .expand-btn { flex-shrink: 0; background: none; border: none; color: #9aa09a; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; font-weight: 700; }
+  .expand-btn:hover { color: var(--accent); }
+  .row-detail { display: none; padding: 10px 12px 12px; background: #faf9f6; border-top: 1px dashed var(--line); flex-wrap: wrap; gap: 14px; align-items: center; }
+  .row-detail.open { display: flex; }
+  .row-detail .toggle-field { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
+  .move-box { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .move-box input[type=number] { width: 46px; border: 1px solid var(--line); border-radius: 5px; padding: 4px 5px; font-size: 12px; }
+  .move-box button { padding: 4px 9px; font-size: 11px; }
+  .excl-count { font-size: 11px; color: #8a8f89; margin-bottom: 10px; }
+  .excl-count b { color: var(--accent); }
+  .settings-row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end; margin-top: 6px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: #555; }
+  .field input, .field select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  button { background: var(--accent); color: #fff; border: none; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  button.danger { background: #fff; color: #b5453a; border: 1px solid #e2c3bd; padding: 5px 10px; font-size: 11px; flex-shrink:0; }
+  .role-note { font-size: 11px; color: #8a8f89; margin-top: 8px; line-height: 1.6; }
+  .vac-list, .hol-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .vac-item { display: flex; align-items: center; gap: 10px; font-size: 12.5px; background: var(--vac); border-radius: 6px; padding: 6px 10px; }
+  .hol-item { display: flex; align-items: center; gap: 10px; font-size: 12.5px; background: var(--hol); border-radius: 6px; padding: 6px 10px; }
+  .vac-item .who { font-weight: 700; color: var(--accent); min-width: 60px; }
+  .vac-item .range, .hol-item .range { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { border: 1px solid var(--line); padding: 8px 6px; text-align: center; vertical-align: top; }
+  th { background: var(--accent); color: #fff; font-weight: 600; font-size: 11.5px; }
+  tr.offweek { background: var(--off-week); }
+  tr.holidayrow th { background: #7a5fa0; }
+  td.dayshift { background: var(--day); }
+  td.nightshift { background: var(--night); }
+  td.extra { background: var(--extra); font-size: 11px; }
+  .team { display: inline-block; margin: 2px 3px; padding: 2px 6px; background: rgba(255,255,255,0.6); border-radius: 5px; font-size: 11.5px; }
+  .team.hl { background: var(--hl); font-weight: 800; box-shadow: 0 0 0 1.5px #e0c400 inset; }
+  .team.search-match { background: #ffd7d7; font-weight: 800; box-shadow: 0 0 0 1.5px #d61f1f inset; }
+  .weekoff { color: #b7bab5; font-size: 12px; }
+  .wk-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-top: 2px; margin-right: 3px; }
+  .wk-badge.work { background: var(--accent-soft); color: var(--accent); }
+  .wk-badge.off { background: #eee; color: #999; }
+  .wk-badge.hol { background: var(--hol); color: #5c3d8f; }
+  .legend { display: flex; gap: 14px; font-size: 11px; color: #6b6f6a; margin-top: 10px; flex-wrap: wrap; }
+  .detail-table { width: auto; border-collapse: collapse; }
+  .detail-table td { border: none; padding: 3px 12px 3px 0; font-size: 12.5px; }
+  .detail-table td.num { text-align: right; font-weight: 700; color: var(--accent); padding-right: 0; }
+  .detail-section-title { font-size: 12.5px; font-weight: 700; color: var(--accent); margin: 12px 0 6px; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .dot.hl { background: var(--hl); box-shadow: 0 0 0 1.5px #e0c400 inset; }
+  input[type=file] { font-size: 12px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab-btn { background: #fff; color: var(--accent); border: 1px solid var(--line); padding: 7px 14px; border-radius: 7px; font-size: 12.5px; cursor: pointer; font-weight: 600; }
+  .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .ovr-item { display: flex; align-items: center; gap: 10px; font-size: 12.5px; background: #e8f0e5; border-radius: 6px; padding: 6px 10px; }
+  .ovr-item .range { flex: 1; }
+  .wk-badge.ovr-add { background: #dcefe0; color: #2f6b3f; }
+  .wk-badge.ovr-remove { background: #f2dede; color: #8a3a3a; }
+  .toast-host { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; width: min(92vw, 420px); }
+  .toast { background: #1f2622; color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; white-space: pre-line; box-shadow: 0 4px 14px rgba(0,0,0,.18); transition: opacity .3s; }
+  .toast.hide { opacity: 0; }
+  .dlg-back { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+  .dlg { background: #fff; border-radius: 12px; padding: 20px; max-width: 420px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+  .dlg p { margin: 0 0 16px; font-size: 14px; line-height: 1.6; white-space: pre-line; }
+  .dlg .row { display: flex; justify-content: flex-end; gap: 8px; }
+  .save-status { font-size: 12px; padding: 6px 10px; border-radius: 6px; display: inline-block; margin-bottom: 14px; background: #eee; color: #555; }
+  .save-status[data-tone="ok"] { background: var(--accent-soft); color: var(--accent); }
+  .save-status[data-tone="err"] { background: #f6dede; color: #8a3a3a; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nl { white-space: nowrap; margin: 1px 0; }
+  .slot-time { font-size: 11px; color: #5d6460; font-variant-numeric: tabular-nums; }
+  td.nightshift, td.extra { text-align: left; }
+  .fix-editor { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .fix-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+  .fix-row .lbl { width: 110px; color: #5d6460; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .fix-row select { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .fix-group { font-size: 12px; font-weight: 700; color: var(--accent); margin-top: 8px; }
+  .range-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+  .chip { font-size: 12px; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; }
+  .inline-undo { display: none; background: #fdf3d8; border: 1px solid #e0c46a; border-radius: 8px; padding: 8px 12px; margin-top: 10px; font-size: 12.5px; align-items: center; justify-content: space-between; gap: 10px; }
+
+  @media (max-width: 640px) {
+    body { padding: 14px 12px 80px; }
+    h1 { font-size: 19px; }
+    .panel { padding: 14px; margin-bottom: 14px; border-radius: 12px; }
+    .settings-row { gap: 10px; }
+    .settings-row .field { flex: 1 1 140px; }
+    .field input, .field select { font-size: 16px; padding: 9px 10px; width: 100%; }
+    button { padding: 11px 16px; font-size: 14px; }
+    button.danger { padding: 8px 12px; font-size: 12px; }
+    .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    .tab-btn { white-space: nowrap; flex-shrink: 0; padding: 8px 12px; }
+    .row-main input[type=text] { font-size: 16px; }
+    .expand-btn { padding: 6px 10px; font-size: 20px; }
+    .row-detail { gap: 12px; }
+    .row-detail .toggle-field { font-size: 13px; }
+    .move-box input[type=number] { font-size: 16px; width: 56px; padding: 6px; }
+    .fix-row .lbl { width: 92px; }
+    .fix-row select { font-size: 16px; }
+    .vac-item, .hol-item, .ovr-item { font-size: 13px; padding: 8px 10px; }
+
+    /* 근무표: 표 대신 날짜별 카드 */
+    table.sched, table.sched tbody, table.sched tr, table.sched th, table.sched td { display: block; width: 100%; }
+    table.sched { border: none; background: transparent; }
+    table.sched thead { display: none; }
+    table.sched tr { background: #fff; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+    table.sched tr.offweek { background: var(--off-week); }
+    table.sched th.date-cell { text-align: left; font-size: 14px; padding: 9px 12px; border: none; }
+    table.sched td { border: none; border-top: 1px solid var(--line); text-align: left; padding: 8px 12px; }
+    table.sched td.badge-cell { border-top: none; padding: 6px 12px 4px; }
+    table.sched td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 700; color: #5d6460; margin-bottom: 3px; }
+    table.sched td.empty-extra { display: none; }
+    .team { font-size: 13px; padding: 3px 8px; }
+    .nl { white-space: normal; }
+
+    /* 공정표 등 다른 표는 가로 스크롤 */
+    #fairnessHost table { font-size: 12px; }
+    #fairnessHost th, #fairnessHost td { padding: 7px 4px; }
+    .toast-host { bottom: 16px; }
+  }
+
+  /* ===== 앱 레이아웃 ===== */
+  body { padding: 0 0 calc(76px + env(safe-area-inset-bottom)) !important; }
+  .wrap { max-width: 760px; padding: 12px 12px 0; }
+  .appbar { position: sticky; top: 0; z-index: 30; background: rgba(246,245,242,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top); }
+  .appbar-in { max-width: 760px; margin: 0 auto; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .app-title { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+  .appbar .save-status { margin: 0; font-size: 11px; padding: 4px 8px; max-width: 62%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .panel { padding: 14px; margin-bottom: 12px; border-radius: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .panel-head h2 { margin: 0; }
+  .panel-head .excl-count { margin: 0; font-size: 11px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+  .grid2 .span2 { grid-column: span 2; }
+  .grid2 .field input, .grid2 .field select, .add-row input, .add-row select, .search-row input { width: 100%; font-size: 16px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; min-width: 0; }
+  button.wide { width: 100%; margin-top: 10px; padding: 12px; font-size: 15px; border-radius: 10px; }
+  button.small { padding: 7px 12px !important; font-size: 12.5px !important; }
+  details > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
+  details > summary::-webkit-details-marker { display: none; }
+  #genBox > summary .sum-title { font-weight: 700; font-size: 15px; color: var(--accent); }
+  #genBox > summary .sum-desc { font-size: 12px; color: #6b6f6a; flex: 1; }
+  #genBox > summary::after { content: "▾"; color: #9aa09a; }
+  #genBox[open] > summary::after { content: "▴"; }
+  details.help { margin-top: 10px; }
+  details.help > summary { font-size: 12px; color: #6b6f6a; }
+  .search-row, .add-row, .action-row { display: flex; gap: 8px; align-items: center; }
+  .search-row { margin-bottom: 10px; }
+  .add-row { margin-top: 10px; }
+  .add-row select, .add-row input { flex: 1; }
+  .action-row { margin-top: 12px; }
+  .action-row > * { flex: 1; text-align: center; }
+  .chip-row { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; }
+  .chipbtn { background: var(--accent-soft); color: var(--accent); border: none; border-radius: 999px; padding: 7px 12px; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+  .filebtn { position: relative; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--accent); color: var(--accent); background: #fff; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .tabs { margin-bottom: 12px; }
+  .legend { gap: 10px; font-size: 10.5px; }
+
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: #fff; border-top: 1px solid var(--line); display: flex; justify-content: center; padding: 4px 4px env(safe-area-inset-bottom); }
+  .tabbar .nav-btn { flex: 1; max-width: 140px; background: none; color: #7b817c; border: none; border-radius: 10px; padding: 6px 2px 8px; font-size: 11px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .tabbar .nav-btn .ic { font-size: 19px; line-height: 1.1; filter: grayscale(1); opacity: .65; }
+  .tabbar .nav-btn.active { color: var(--accent); }
+  .tabbar .nav-btn.active .ic { filter: none; opacity: 1; }
+
+  /* ===== 근무표 그리드 ===== */
+  #resultPanel { padding: 10px; }
+  #tableHost { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px; border: none; background: transparent; table-layout: fixed; min-width: 330px; }
+  table.grid th, table.grid td { border: none; border-bottom: 1px solid #ebe8e1; padding: 5px 2px; text-align: center; vertical-align: middle; }
+  table.grid thead th { position: sticky; top: 0; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700; padding: 6px 2px; }
+  table.grid thead th:first-child { border-radius: 8px 0 0 8px; }
+  table.grid thead th:last-child { border-radius: 0 8px 8px 0; }
+  table.grid col.c-date { width: 13%; }
+  table.grid col.c-day { width: 16%; }
+  table.grid col.c-n { width: 14%; }
+  table.grid col.c-x { width: 15%; }
+  table.grid td.d { text-align: center; line-height: 1.15; }
+  table.grid td.d .dn { display: block; font-size: 14px; font-weight: 800; }
+  table.grid td.d .dw { display: block; font-size: 10px; color: #6b6f6a; }
+  table.grid tr.we td.d .dw { color: #b5453a; }
+  table.grid tr.hol td.d { background: var(--hol); }
+  table.grid tr.hol td.d .dw { color: #5c3d8f; }
+  table.grid td.day { background: #faf5ea; }
+  table.grid td.n { background: #f2f5f9; }
+  table.grid td.n.hard { background: #e7ecf3; }
+  table.grid td.x { background: #fbefef; }
+  table.grid td.empty { background: transparent; color: #c9cbc6; }
+  table.grid .team { display: block; margin: 1px auto; padding: 1px 2px; font-size: 11.5px; background: transparent; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.grid .tm { display: inline-block; font-size: 9.5px; color: #8a6d1f; background: #f1e6c9; border-radius: 3px; padding: 0 3px; margin-bottom: 1px; }
+  table.grid .ov { display: block; font-size: 9px; color: #2f6b3f; }
+  table.grid .ov.rm { color: #8a3a3a; }
+  table.grid tr.wk td { background: transparent; text-align: left; font-size: 11.5px; font-weight: 700; color: var(--accent); padding: 12px 4px 4px; border-bottom: 2px solid var(--accent-soft); }
+  table.grid tr.wk.off td { color: #9aa09a; }
+  table.grid tr.wk td .wk-sub { font-weight: 500; color: #8a8f89; margin-left: 6px; font-size: 11px; }
+  @media (min-width: 641px) {
+    table.grid { font-size: 13px; }
+    table.grid .team { font-size: 13px; }
+    table.grid td.d .dn { font-size: 16px; }
+  }
+
+  .grid2 > .field { min-width: 0; }
+  input[type=date] { min-width: 0; max-width: 100%; display: block; }
+  button.small, .search-row button { white-space: nowrap; flex-shrink: 0; }
+  #fairnessHost table { font-size: 13px; border: none; }
+  #fairnessHost th { font-size: 11px; padding: 7px 3px; line-height: 1.3; }
+  #fairnessHost td { padding: 6px 3px; vertical-align: middle; border-left: none; border-right: none; }
+  #fairnessHost td button[data-person] { background: none !important; border: none !important; color: var(--ink) !important; padding: 2px 0 !important; font-size: 13.5px !important; font-weight: 600; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+  #fairnessHost td button[data-person] .team.hl { margin: 0; }
+  .roster-list { gap: 4px; }
+  .roster-row { border-radius: 10px; }
+  .row-main { padding: 3px 6px 3px 8px; }
+  @media (max-width: 640px) { .row-main input[type=text] { padding: 6px 2px; } .expand-btn { padding: 4px 8px; } }
+  .badge.prot { background: #e3eefc; color: #2b5a99; }
+  .badge.dis { background: #f3e1e1; color: #8a3a3a; }
+  .date-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; font-size: 12.5px; color: #555; }
+  .date-box label { display: flex; align-items: center; gap: 5px; }
+  .date-box input[type=date] { border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; font-size: 14px; background: #fff; }
+  .date-box input[type=number] { width: 46px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; font-size: 14px; }
+  .date-note { font-size: 11.5px; color: #8a8f89; width: 100%; }
+  @media (max-width: 640px) { .date-box input[type=date], .date-box input[type=number] { font-size: 16px; } }
+  .save-help { margin-top: 10px; background: #f4f7f5; border: 1px solid var(--accent-soft); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: #4f5651; line-height: 1.55; }
+  .save-help b { color: var(--ink); }
+  .save-help > b { color: var(--accent); font-size: 12.5px; }
+  .save-help ul { margin: 6px 0 0; padding-left: 16px; }
+  .save-help li { margin: 2px 0; }
+  .seg { display: flex; background: #e9e6df; border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+  .seg-btn { flex: 1; background: none; border: none; color: #5d6460; font-size: 14px; font-weight: 700; padding: 9px 0; border-radius: 8px; }
+  .seg-btn.active { background: #fff; color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  #pastLabel { font-size: 16px; font-weight: 800; }
+  #pastPanel { padding: 10px; }
+  #pastHost { overflow-x: auto; }
+  #pastSearchInfo { font-size: 12.5px; color: #4f5651; }
+  .hard-line { padding: 6px 2px; line-height: 1.6; }
+  .hard-tag { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 2px; }
+  .hard-tag.hi { background: #f6dede; color: #8a3a3a; }
+  .hard-tag.lo { background: #e3eefc; color: #2b5a99; }
+  .hard-tag.mid { background: var(--accent-soft); color: var(--accent); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="loading">
+<header class="appbar">
+  <div class="appbar-in">
+    <div class="app-title">근무표</div>
+    <div id="saveStatus" class="save-status">불러오는 중…</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ===== 근무표 ===== -->
+  <section class="view active" data-view="schedule">
+    <div class="seg">
+      <button class="seg-btn active" data-mode="make">근무표 만들기</button>
+      <button class="seg-btn" data-mode="past">지난 기록</button>
+    </div>
+    <div id="makeMode">
+    <div class="panel">
+      <details id="genBox" open>
+        <summary><span class="sum-title">생성 설정</span><span class="sum-desc" id="genSummary"></span></summary>
+        <div class="grid2">
+          <div class="field"><label>근무 시작 월요일</label><input type="date" id="startDate"></div>
+          <div class="field"><label>기간</label>
+            <select id="weeksToShow">
+              <option value="2">2주</option><option value="4" selected>4주</option><option value="6">6주</option><option value="8">8주</option>
+            </select>
+          </div>
+          <div class="field"><label>주간 시작 인원</label><select id="dayStart"></select></div>
+          <div class="field"><label>야간 시작 인원</label><select id="nightStart"></select></div>
+        </div>
+      </details>
+      <button id="gen" class="wide">근무표 생성</button>
+    </div>
+
+    <div class="panel" id="resultPanel" style="display:none;">
+      <div class="search-row">
+        <input type="text" id="scheduleSearch" placeholder="이름 검색">
+        <button class="secondary small" id="clearSearch">지우기</button>
+      </div>
+      <div id="tableHost"></div>
+      <div class="legend">
+        <span><span class="dot hl"></span>강조</span>
+        <span><span class="dot" style="background:#ffd7d7"></span>검색</span>
+        <span><span class="dot" style="background:var(--hol)"></span>공휴일</span>
+        <span>①② 다음날 07시까지 연장</span>
+      </div>
+      <div class="action-row">
+        <button id="saveHistory">기록에 저장</button>
+        <button class="secondary" id="exportExcel">엑셀</button>
+      </div>
+      <div class="save-help">
+        <b>"기록에 저장"을 누르면</b>
+        <ul>
+          <li>지금 보이는 근무표가 <b>실제로 선 근무</b>로 기록돼요.</li>
+          <li><b>공정표는 저장된 기록만 세요.</b> 생성만 하고 저장하지 않으면 공정표에 반영되지 않아요.</li>
+          <li>저장한 날짜마다 각자의 야간 시간대(22–02시 / 힘든 02–06시)와 연장 횟수가 더해지고, 힘든 비율이 다시 계산돼요.</li>
+          <li>같은 날짜를 다시 저장하면 <b>새 결과로 바뀌어요</b>(두 번 세지 않아요).</li>
+          <li>다음 근무표를 만들 때 시작 인원이 이어서 자동으로 골라져요.</li>
+          <li>휴가 반영까지 끝나서 근무가 확정됐을 때 저장하세요. 잘못 저장했으면 ⚙️ 설정 → "기록 바로잡기"에서 고칠 수 있어요.</li>
+        </ul>
+      </div>
+      <div class="role-note" id="continuationInfo"></div>
+    </div>
+    </div>
+    <div id="pastMode" style="display:none;">
+      <div class="panel" id="pastPanel">
+        <div class="month-nav">
+          <button class="secondary small" id="pastPrev" aria-label="이전 달">◀</button>
+          <span id="pastLabel"></span>
+          <button class="secondary small" id="pastNext" aria-label="다음 달">▶</button>
+        </div>
+        <div class="search-row">
+          <input type="text" id="pastSearch" placeholder="이름 검색">
+          <button class="secondary small" id="pastSearchClear">지우기</button>
+        </div>
+        <div class="role-note" id="pastSearchInfo" style="margin:0 0 6px;"></div>
+        <div id="pastHost"></div>
+        <div class="role-note">"기록에 저장"한 근무만 보여요. 고칠 곳이 있으면 ⚙️ 설정 → "기록 바로잡기"에서 고칠 수 있어요.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 인원 ===== -->
+  <section class="view" data-view="people">
+    <div class="panel">
+      <div class="panel-head"><h2>인원 명단</h2><span class="excl-count">주간 제외 <b id="dayExclCount">0</b> · 야간 제외 <b id="nightExclCount">0</b> · 강조 <b id="hlCount">0</b></span></div>
+      <div id="roster" class="roster-list"></div>
+      <div class="add-row">
+        <select id="addPosition"></select>
+        <button class="secondary" id="addPerson">+ 추가</button>
+      </div>
+      <details class="help"><summary>도움말</summary>
+        <div class="role-note">· "⋯"를 누르면 주간/야간 제외, 강조, 순번 이동, 삭제를 할 수 있어요.<br>· 주간 제외 인원은 주간 순번에서 빠지고, 야간 제외 인원은 다음날이 휴일인 밤에만 야간에 들어가요.<br>· 합류일을 넣으면 적응 기간(기본 4주) 동안 근무에서 빠지고, 끝나는 날부터 자기 순번 자리에서 자동으로 들어가요.<br>· 종료일을 넣으면 그 전날부터 근무에서 빠져요. 종료 후 "삭제"하면 기록은 공정표의 "지난 인원"에서 계속 볼 수 있어요.</div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ===== 일정 예외 ===== -->
+  <section class="view" data-view="calendar">
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="vac">휴가</button>
+        <button class="tab-btn" data-tab="hol">공휴일</button>
+        <button class="tab-btn" data-tab="ovr">하루 조정</button>
+        <button class="tab-btn" data-tab="wk">주 조정</button>
+      </div>
+
+      <div class="tab-content active" data-tabcontent="vac">
+        <div class="grid2">
+          <div class="field span2"><label>인원</label><select id="vacPerson"></select></div>
+          <div class="field"><label>시작일</label><input type="date" id="vacStart"></div>
+          <div class="field"><label>종료일</label><input type="date" id="vacEnd"></div>
+        </div>
+        <div class="chip-row">
+          <button class="chipbtn" data-quick="0">당일</button>
+          <button class="chipbtn" data-quick="-1">-1일</button>
+          <button class="chipbtn" data-quick="1">+1일</button>
+          <button class="chipbtn" data-quick="2">+2일</button>
+          <button class="chipbtn" data-quick="3">+3일</button>
+          <button class="chipbtn" data-quick="6">+1주</button>
+        </div>
+        <button class="wide" id="addVac">휴가 추가</button>
+        <div class="role-note">휴가 기간 주간은 전부 빠지고, 야간은 마지막 날 밤부터 다시 들어가요.</div>
+        <div class="vac-list" id="vacList"></div>
+      </div>
+
+      <div class="tab-content" data-tabcontent="hol">
+        <div class="grid2">
+          <div class="field"><label>날짜</label><input type="date" id="holDate"></div>
+          <div class="field"><label>이름 (선택)</label><input type="text" id="holLabel" placeholder="예: 광복절"></div>
+        </div>
+        <button class="wide" id="addHol">공휴일 추가</button>
+        <div class="role-note">토·일요일은 자동으로 휴일이에요. 평일 공휴일만 넣으면 돼요.</div>
+        <div class="hol-list" id="holList"></div>
+      </div>
+
+      <div class="tab-content" data-tabcontent="ovr">
+        <div class="grid2">
+          <div class="field span2"><label>날짜</label><input type="date" id="ovrDate"></div>
+          <div class="field"><label>조정</label>
+            <select id="ovrMode">
+              <option value="add">근무 추가</option>
+              <option value="remove">근무 없음</option>
+            </select>
+          </div>
+          <div class="field"><label>범위</label>
+            <select id="ovrScope">
+              <option value="full">주간+야간</option>
+              <option value="day">주간만</option>
+            </select>
+          </div>
+        </div>
+        <button class="wide" id="addOvr">추가</button>
+        <div class="role-note">"주간+야간"은 근무↔휴무 경계에 09시 인수인계가 자동으로 붙고, "주간만"은 야간은 그대로 둬요.</div>
+        <div class="hol-list" id="ovrList"></div>
+      </div>
+
+      <div class="tab-content" data-tabcontent="wk">
+        <div class="grid2">
+          <div class="field"><label>그 주의 아무 날짜</label><input type="date" id="wkDate"></div>
+          <div class="field"><label>조정</label>
+            <select id="wkMode">
+              <option value="off">휴무주로</option>
+              <option value="work">근무주로</option>
+            </select>
+          </div>
+        </div>
+        <button class="wide" id="addWk">주 전체 적용</button>
+        <div class="role-note">하루 조정을 따로 걸어두면 그게 먼저 적용돼요.</div>
+        <div class="hol-list" id="wkList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 공정표 ===== -->
+  <section class="view" data-view="fairness">
+    <div class="panel" id="fairnessEmpty">
+      <div class="role-note" style="margin:0;">아직 저장된 기록이 없어요. 근무표를 만들고 "기록에 저장"을 누르면 여기서 집계돼요.</div>
+    </div>
+    <div class="panel" id="fairnessPanel" style="display:none;">
+      <div class="panel-head"><h2>야간 공정표</h2><button class="secondary small" id="genFairness">새로고침</button></div>
+      <div id="undoBanner" style="display:none;background:#fdf3d8;border:1px solid #e0c46a;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12.5px;align-items:center;justify-content:space-between;gap:10px;"></div>
+      <div class="tabs">
+        <button class="tab-btn active" data-sort="name">이름순</button>
+        <button class="tab-btn" data-sort="ratioAsc">힘든비율 ↑</button>
+        <button class="tab-btn" data-sort="ratioDesc">힘든비율 ↓</button>
+      </div>
+      <div id="fairnessHost" style="overflow-x:auto;"></div>
+      <div class="role-note">힘든 시간대 = 02–06시. 이름을 누르면 그 사람 일정이 아래에 나와요.</div>
+      <div id="personDetailHost" style="margin-top:12px;"></div>
+    </div>
+  </section>
+
+  <!-- ===== 설정 ===== -->
+  <section class="view" data-view="settings">
+    <div class="panel">
+      <h2>저장 · 백업</h2>
+      <div id="localNote" style="display:none;" class="role-note">데이터는 이 기기 안에 자동 저장돼요. 앱을 지우거나 기기를 바꾸기 전에 백업 파일을 받아두세요.</div>
+      <div class="action-row">
+        <button class="secondary" id="exportBtn">백업 파일 받기</button>
+        <label class="secondary filebtn">파일 불러오기<input type="file" id="importFile" accept="application/json,.json"></label>
+      </div>
+    </div>
+
+    <div class="panel" id="fixPanel">
+      <h2>기록 바로잡기</h2>
+      <div style="font-size:12px;color:#5d6460;">저장된 기간</div>
+      <div class="range-chips" id="savedRanges"></div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="fixday">하루 수정</button>
+        <button class="tab-btn" data-tab="fixrange">기간 삭제</button>
+      </div>
+      <div class="tab-content active" data-tabcontent="fixday">
+        <div class="add-row">
+          <input type="date" id="fixDate">
+          <button class="secondary" id="fixLoad">불러오기</button>
+        </div>
+        <div class="fix-editor" id="fixEditor"></div>
+      </div>
+      <div class="tab-content" data-tabcontent="fixrange">
+        <div class="grid2">
+          <div class="field"><label>시작일</label><input type="date" id="fixRangeStart"></div>
+          <div class="field"><label>종료일</label><input type="date" id="fixRangeEnd"></div>
+        </div>
+        <button class="danger wide" id="fixRangeDelete">이 기간 기록 삭제</button>
+      </div>
+      <div class="inline-undo" id="fixUndo"></div>
+      <div class="role-note">잘못 저장한 기간은 근무표를 다시 만들어 "기록에 저장"하면 같은 날짜가 새 결과로 바뀌어요.</div>
+    </div>
+
+    <div class="panel">
+      <button class="danger wide" id="clearHistory">누적 기록 전체 초기화</button>
+    </div>
+  </section>
+</div>
+
+<nav class="tabbar">
+  <button class="nav-btn active" data-go="schedule"><span class="ic">📅</span>근무표</button>
+  <button class="nav-btn" data-go="people"><span class="ic">👥</span>인원</button>
+  <button class="nav-btn" data-go="calendar"><span class="ic">🏖️</span>휴가·일정</button>
+  <button class="nav-btn" data-go="fairness"><span class="ic">⚖️</span>공정표</button>
+  <button class="nav-btn" data-go="settings"><span class="ic">⚙️</span>설정</button>
+</nav>
+
+<script>
+// ---- 페이지 안 확인창 / 알림 ----
+function showToast(msg) {
+  const host = document.getElementById("toastHost");
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  host.appendChild(el);
+  setTimeout(() => { el.classList.add("hide"); setTimeout(() => el.remove(), 300); }, 3200);
+}
+function askConfirm(msg) {
+  return new Promise(resolve => {
+    const back = document.getElementById("dlgBack");
+    document.getElementById("dlgMsg").textContent = msg;
+    back.style.display = "flex";
+    const ok = document.getElementById("dlgOk"), no = document.getElementById("dlgNo");
+    const done = (v) => { back.style.display = "none"; ok.onclick = null; no.onclick = null; resolve(v); };
+    ok.onclick = () => done(true);
+    no.onclick = () => done(false);
+    ok.focus();
+  });
+}
+let idCounter = 1;
+function newId() { return idCounter++; }
+
+let roster = Array.from({length: 20}, (_, i) => {
+  const label = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i];
+  return { id: newId(), name: label };
+});
+const dayExcluded = new Set([roster[0].id, roster[1].id, roster[2].id]);
+const nightExcluded = new Set([roster[0].id, roster[1].id]);
+const highlighted = new Set();
+const vacations = []; // {person: id, start, end}
+let historyLog = []; // 누적 저장된 실제 배정 기록: {iso, personId, type: 'day'|'night'|'extra', team?, dayKind?, slot?}
+let departedPeople = []; // 삭제된 인원 {id, name} — 공정표에서 '지난 인원'로 조회 가능하도록 보관
+let continuationDayId = null;   // 다음 생성 때 자동으로 선택될 주간 시작 인원
+let continuationNightId = null; // 다음 생성 때 자동으로 선택될 야간 시작 인원
+let pendingNextDayId = null;    // 방금 생성한 근무표 기준으로 "다음 사람"이 될 후보 (저장을 눌러야 확정됨)
+let pendingNextNightId = null;
+const holidays = [];  // {date, label}
+const overrides = []; // {date, mode: 'add' | 'remove'}
+const weekOverrides = []; // {monday: iso, mode: 'work' | 'off'}
+
+// ---- 탭 전환 (각 패널 안에서만) ----
+document.querySelectorAll(".tab-btn[data-tab]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const panel = btn.closest(".panel");
+    panel.querySelectorAll(".tab-btn[data-tab]").forEach(b => b.classList.remove("active"));
+    panel.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    btn.classList.add("active");
+    const target = panel.querySelector(`.tab-content[data-tabcontent="${btn.dataset.tab}"]`);
+    if (target) target.classList.add("active");
+  });
+});
+
+function getNamesMap() {
+  const map = {};
+  roster.forEach((p, idx) => { map[p.id] = (p.name && p.name.trim()) || String(idx + 1); });
+  return map;
+}
+
+const expandedIds = new Set();
+
+function shortMD(d) { return `${d.getMonth()+1}/${d.getDate()}`; }
+function renderRoster() {
+  const host = document.getElementById("roster");
+  const names = getNamesMap();
+  host.innerHTML = "";
+  roster.forEach((p, idx) => {
+    const row = document.createElement("div");
+    row.className = "roster-row";
+    const badges = [
+      dayExcluded.has(p.id) ? '<span class="badge day">주제외</span>' : '',
+      nightExcluded.has(p.id) ? '<span class="badge night">야제외</span>' : '',
+      highlighted.has(p.id) ? '<span class="badge hl">★강조</span>' : '',
+      (() => { const ps = protectStartISO(p); return ps && toISO(new Date()) < ps ? `<span class="badge prot">적응~${shortMD(addDays(new Date(ps + "T00:00:00"), -1))}</span>` : ''; })(),
+      p.dischargeDate ? `<span class="badge dis">종료 ${shortMD(new Date(p.dischargeDate + "T00:00:00"))}</span>` : ''
+    ].join("");
+    const ps = protectStartISO(p);
+    row.innerHTML = `
+      <div class="row-main">
+        <div class="tag">${idx + 1}</div>
+        <input type="text" data-id="${p.id}" class="nameInput" value="${p.name || ''}" placeholder="이름 입력">
+        <div class="badges">${badges}</div>
+        <button class="expand-btn" data-toggle="${p.id}">${expandedIds.has(p.id) ? '▲' : '⋯'}</button>
+      </div>
+      <div class="row-detail ${expandedIds.has(p.id) ? 'open' : ''}" data-detail="${p.id}">
+        <label class="toggle-field"><input type="checkbox" data-role="day" data-id="${p.id}" ${dayExcluded.has(p.id) ? 'checked' : ''}> 주간 제외</label>
+        <label class="toggle-field"><input type="checkbox" data-role="night" data-id="${p.id}" ${nightExcluded.has(p.id) ? 'checked' : ''}> 야간 제외</label>
+        <label class="toggle-field"><input type="checkbox" data-role="hl" data-id="${p.id}" ${highlighted.has(p.id) ? 'checked' : ''}> 강조 표시</label>
+        <div class="date-box">
+          <label>합류일 <input type="date" data-role="join" data-id="${p.id}" value="${p.joinDate || ''}"></label>
+          <label>적응 <input type="number" min="0" max="12" data-role="protect" data-id="${p.id}" value="${Number.isFinite(p.protectWeeks) ? p.protectWeeks : 4}">주</label>
+          <span class="date-note">${ps ? `${shortMD(new Date(ps + "T00:00:00"))}부터 근무 투입` : '합류일을 넣으면 적응 기간 동안 근무에서 빠져요'}</span>
+        </div>
+        <div class="date-box">
+          <label>종료일 <input type="date" data-role="discharge" data-id="${p.id}" value="${p.dischargeDate || ''}"></label>
+          <span class="date-note">${p.dischargeDate ? `${shortMD(addDays(new Date(p.dischargeDate + "T00:00:00"), -1))}부터 근무 없음` : '종료일 전날부터 근무에서 빠져요'}</span>
+        </div>
+        <div class="move-box">
+          <span style="font-size:12px;color:#555;">순번 이동 (번호만)</span>
+          <input type="number" min="1" max="${roster.length}" value="${idx + 1}" data-move-input="${p.id}">
+          <button class="secondary" data-move="${p.id}">이동</button>
+        </div>
+        <button class="danger" data-del="${p.id}">삭제</button>
+      </div>`;
+    host.appendChild(row);
+  });
+  updateCounts();
+  refreshAddPositionOptions();
+}
+
+function refreshAddPositionOptions() {
+  const names = getNamesMap();
+  const sel = document.getElementById("addPosition");
+  const opts = [];
+  opts.push(`<option value="1">맨 앞 (1번)</option>`);
+  roster.forEach((p, idx) => {
+    opts.push(`<option value="${idx + 2}">${names[p.id]} (${idx + 1}번) 다음</option>`);
+  });
+  const prev = sel.value;
+  sel.innerHTML = opts.join("");
+  const stillValid = [...sel.options].some(o => o.value === prev);
+  sel.value = stillValid ? prev : String(roster.length + 1);
+}
+
+function updateCounts() {
+  document.getElementById("dayExclCount").textContent = dayExcluded.size;
+  document.getElementById("nightExclCount").textContent = nightExcluded.size;
+  document.getElementById("hlCount").textContent = highlighted.size;
+}
+
+document.getElementById("roster").addEventListener("input", (e) => {
+  if (e.target.classList.contains("nameInput")) {
+    const id = parseInt(e.target.dataset.id, 10);
+    const p = roster.find(r => r.id === id);
+    if (p) p.name = e.target.value;
+    refreshDropdowns();
+  }
+});
+
+document.getElementById("roster").addEventListener("change", (e) => {
+  const id = parseInt(e.target.dataset.id, 10);
+  if (e.target.dataset.role === "day") {
+    if (e.target.checked) dayExcluded.add(id); else dayExcluded.delete(id);
+    updateCounts(); refreshDropdowns();
+  } else if (e.target.dataset.role === "night") {
+    if (e.target.checked) nightExcluded.add(id); else nightExcluded.delete(id);
+    updateCounts(); refreshDropdowns();
+  } else if (e.target.dataset.role === "hl") {
+    if (e.target.checked) highlighted.add(id); else highlighted.delete(id);
+    updateCounts();
+  } else if (["join", "protect", "discharge"].includes(e.target.dataset.role)) {
+    const p = rosterPerson(id);
+    if (!p) return;
+    const v = e.target.value;
+    if (e.target.dataset.role === "join") { if (v) p.joinDate = v; else delete p.joinDate; }
+    if (e.target.dataset.role === "protect") { const n = parseInt(v, 10); p.protectWeeks = Number.isFinite(n) && n >= 0 ? n : 4; }
+    if (e.target.dataset.role === "discharge") { if (v) p.dischargeDate = v; else delete p.dischargeDate; }
+    renderRoster();
+  }
+});
+
+document.getElementById("roster").addEventListener("click", async (e) => {
+  if (e.target.dataset.toggle) {
+    const id = parseInt(e.target.dataset.toggle, 10);
+    if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
+    renderRoster();
+    return;
+  }
+  if (e.target.dataset.del) {
+    const id = parseInt(e.target.dataset.del, 10);
+    if (roster.length <= 5) { showToast("최소 5명 이상은 유지해야 해요."); return; }
+    if (!await askConfirm("이 인원을 삭제할까요? 관련 제외/강조/휴가 설정도 함께 삭제돼요. (근무 기록은 공정표의 '지난 인원'에서 계속 조회할 수 있어요)")) return;
+    const namesBeforeDelete = getNamesMap();
+    if (!departedPeople.some(d => d.id === id)) {
+      departedPeople.push({ id, name: namesBeforeDelete[id] });
+    }
+    roster = roster.filter(p => p.id !== id);
+    dayExcluded.delete(id); nightExcluded.delete(id); highlighted.delete(id); expandedIds.delete(id);
+    for (let i = vacations.length - 1; i >= 0; i--) if (vacations[i].person === id) vacations.splice(i, 1);
+    renderRoster(); renderVacList(); refreshDropdowns();
+  }
+  if (e.target.dataset.move) {
+    const id = parseInt(e.target.dataset.move, 10);
+    const input = document.querySelector(`input[data-move-input="${id}"]`);
+    const names = getNamesMap();
+    const currentIdx = roster.findIndex(p => p.id === id);
+    let target = parseInt(input.value, 10);
+    if (!target || target < 1 || target > roster.length) { showToast(`1부터 ${roster.length} 사이 번호를 입력해주세요.`); input.value = currentIdx + 1; return; }
+    const targetIdx = target - 1;
+    if (targetIdx === currentIdx) return;
+    if (!await askConfirm(`"${names[id]}"의 순번을 ${currentIdx + 1}번 → ${target}번으로 옮길까요?\n다른 인원들의 순번도 함께 밀려요.`)) { input.value = currentIdx + 1; return; }
+    const [moved] = roster.splice(currentIdx, 1);
+    roster.splice(targetIdx, 0, moved);
+    renderRoster(); refreshDropdowns(); renderVacList();
+  }
+});
+
+document.getElementById("addPerson").addEventListener("click", () => {
+  const posVal = parseInt(document.getElementById("addPosition").value, 10);
+  const insertIdx = Math.min(Math.max((posVal || (roster.length + 1)) - 1, 0), roster.length);
+  const nid = newId();
+  roster.splice(insertIdx, 0, { id: nid, name: "" });
+  expandedIds.add(nid);
+  renderRoster(); refreshDropdowns();
+});
+
+function refreshDropdowns() {
+  const names = getNamesMap();
+  const dayPool = roster.filter(p => !dayExcluded.has(p.id)).map(p => p.id);
+  const nightPoolFull = roster.map(p => p.id).slice().reverse();
+
+  const dayStartSel = document.getElementById("dayStart");
+  const nightStartSel = document.getElementById("nightStart");
+  const vacPersonSel = document.getElementById("vacPerson");
+  const prevDay = dayStartSel.value, prevNight = nightStartSel.value, prevVac = vacPersonSel.value;
+
+  dayStartSel.innerHTML = dayPool.map(id => `<option value="${id}">${names[id]}</option>`).join("");
+  nightStartSel.innerHTML = nightPoolFull.map(id => `<option value="${id}">${names[id]}</option>`).join("");
+  const vacSorted = roster.slice().sort((a, b) => names[a.id].localeCompare(names[b.id], "ko"));
+  vacPersonSel.innerHTML = vacSorted.map(p => `<option value="${p.id}">${names[p.id]}</option>`).join("");
+
+  if (dayPool.includes(parseInt(prevDay))) dayStartSel.value = prevDay;
+  else if (continuationDayId != null && dayPool.includes(continuationDayId)) dayStartSel.value = continuationDayId;
+  if (nightPoolFull.includes(parseInt(prevNight))) nightStartSel.value = prevNight;
+  else if (continuationNightId != null && nightPoolFull.includes(continuationNightId)) nightStartSel.value = continuationNightId;
+  if (prevVac) vacPersonSel.value = prevVac;
+}
+
+renderRoster();
+refreshDropdowns();
+
+// 기본 시작일: 다음 월요일
+(function setDefaultDate(){
+  const today = new Date();
+  const day = today.getDay();
+  const diff = (day === 1) ? 0 : ((8 - day) % 7 || 7);
+  const nextMon = new Date(today);
+  nextMon.setDate(today.getDate() + diff);
+  document.getElementById("startDate").value = nextMon.toISOString().split("T")[0];
+})();
+
+// ---- 공휴일 ----
+function renderHolList() {
+  const host = document.getElementById("holList");
+  if (holidays.length === 0) { host.innerHTML = '<div class="role-note">등록된 평일 공휴일이 없어요.</div>'; return; }
+  const sorted = holidays.slice().sort((a,b) => a.date.localeCompare(b.date));
+  host.innerHTML = sorted.map((h) => {
+    const idx = holidays.indexOf(h);
+    return `<div class="hol-item"><span class="range">${h.date}${h.label ? ' · ' + h.label : ''}</span><button class="danger" data-idx="${idx}">삭제</button></div>`;
+  }).join("");
+  host.querySelectorAll("button.danger").forEach(btn => {
+    btn.addEventListener("click", () => { holidays.splice(parseInt(btn.dataset.idx, 10), 1); renderHolList(); });
+  });
+}
+document.getElementById("addHol").addEventListener("click", () => {
+  const date = document.getElementById("holDate").value;
+  const label = document.getElementById("holLabel").value.trim();
+  if (!date) { showToast("날짜를 선택해주세요."); return; }
+  if (holidays.some(h => h.date === date)) { showToast("이미 등록된 날짜예요."); return; }
+  holidays.push({ date, label });
+  document.getElementById("holLabel").value = "";
+  renderHolList();
+});
+renderHolList();
+
+// ---- 근무일 수동 조정 ----
+function renderOvrList() {
+  const host = document.getElementById("ovrList");
+  if (overrides.length === 0) { host.innerHTML = '<div class="role-note">등록된 수동 조정이 없어요.</div>'; return; }
+  const sorted = overrides.slice().sort((a,b) => a.date.localeCompare(b.date));
+  host.innerHTML = sorted.map((o) => {
+    const idx = overrides.indexOf(o);
+    const label = o.mode === 'add' ? '근무 추가' : '근무 없음';
+    const scopeLabel = o.scope === 'day' ? '주간만' : '주간+야간';
+    return `<div class="ovr-item"><span class="range">${o.date} · ${label} (${scopeLabel})</span><button class="danger" data-idx="${idx}">삭제</button></div>`;
+  }).join("");
+  host.querySelectorAll("button.danger").forEach(btn => {
+    btn.addEventListener("click", () => { overrides.splice(parseInt(btn.dataset.idx, 10), 1); renderOvrList(); });
+  });
+}
+document.getElementById("addOvr").addEventListener("click", async () => {
+  const date = document.getElementById("ovrDate").value;
+  const mode = document.getElementById("ovrMode").value;
+  const scope = document.getElementById("ovrScope").value;
+  if (!date) { showToast("날짜를 선택해주세요."); return; }
+  const existing = overrides.find(o => o.date === date);
+  if (existing) {
+    if (!await askConfirm(`${date}에 이미 조정이 등록돼 있어요. 덮어쓸까요?`)) return;
+    existing.mode = mode;
+    existing.scope = scope;
+  } else {
+    overrides.push({ date, mode, scope });
+  }
+  renderOvrList();
+});
+renderOvrList();
+
+// ---- 주 단위 조정 ----
+function mondayOf(date) {
+  const wd = date.getDay();
+  const diff = wd === 0 ? -6 : (1 - wd);
+  return addDays(date, diff);
+}
+function renderWkList() {
+  const host = document.getElementById("wkList");
+  if (weekOverrides.length === 0) { host.innerHTML = '<div class="role-note">등록된 주 단위 조정이 없어요.</div>'; return; }
+  const sorted = weekOverrides.slice().sort((a,b) => a.monday.localeCompare(b.monday));
+  host.innerHTML = sorted.map((w) => {
+    const idx = weekOverrides.indexOf(w);
+    const mondayDate = new Date(w.monday + "T00:00:00");
+    const sundayDate = addDays(mondayDate, 6);
+    const range = `${mondayDate.getMonth()+1}/${mondayDate.getDate()} ~ ${sundayDate.getMonth()+1}/${sundayDate.getDate()}`;
+    const label = w.mode === 'work' ? '근무주로' : '휴무주로';
+    return `<div class="ovr-item"><span class="range">${range} 주 → ${label}</span><button class="danger" data-idx="${idx}">삭제</button></div>`;
+  }).join("");
+  host.querySelectorAll("button.danger").forEach(btn => {
+    btn.addEventListener("click", () => { weekOverrides.splice(parseInt(btn.dataset.idx, 10), 1); renderWkList(); });
+  });
+}
+document.getElementById("addWk").addEventListener("click", async () => {
+  const dateVal = document.getElementById("wkDate").value;
+  const mode = document.getElementById("wkMode").value;
+  if (!dateVal) { showToast("날짜를 선택해주세요."); return; }
+  const monday = toISO(mondayOf(new Date(dateVal + "T00:00:00")));
+  const existing = weekOverrides.find(w => w.monday === monday);
+  if (existing) {
+    if (!await askConfirm("이 주는 이미 조정이 등록돼 있어요. 덮어쓸까요?")) return;
+    existing.mode = mode;
+  } else {
+    weekOverrides.push({ monday, mode });
+  }
+  renderWkList();
+});
+renderWkList();
+
+// ---- 휴가 ----
+function renderVacList() {
+  const names = getNamesMap();
+  const host = document.getElementById("vacList");
+  if (vacations.length === 0) { host.innerHTML = '<div class="role-note">등록된 휴가가 없어요.</div>'; return; }
+  host.innerHTML = vacations.map((v, idx) => `
+    <div class="vac-item"><span class="who">${names[v.person] || '(삭제됨)'}</span><span class="range">${v.start} ~ ${v.end}</span><button class="danger" data-idx="${idx}">삭제</button></div>`).join("");
+  host.querySelectorAll("button.danger").forEach(btn => {
+    btn.addEventListener("click", () => { vacations.splice(parseInt(btn.dataset.idx, 10), 1); renderVacList(); });
+  });
+}
+document.getElementById("addVac").addEventListener("click", () => {
+  const person = parseInt(document.getElementById("vacPerson").value, 10);
+  const start = document.getElementById("vacStart").value;
+  const end = document.getElementById("vacEnd").value;
+  if (!start || !end) { showToast("휴가 시작일과 종료일을 모두 선택해주세요."); return; }
+  if (start > end) { showToast("종료일이 시작일보다 빠를 수 없어요."); return; }
+  vacations.push({ person, start, end });
+  renderVacList();
+  document.getElementById("vacStart").value = "";
+  document.getElementById("vacEnd").value = "";
+});
+renderVacList();
+
+document.getElementById("vacStart").addEventListener("change", () => {
+  const startVal = document.getElementById("vacStart").value;
+  const endEl = document.getElementById("vacEnd");
+  if (startVal) endEl.value = startVal; // 시작일을 바꾸면 종료일도 항상 같이 리셋
+});
+document.querySelectorAll('[data-quick]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const startVal = document.getElementById("vacStart").value;
+    if (!startVal) { showToast("시작일을 먼저 선택해주세요."); return; }
+    const days = parseInt(btn.dataset.quick, 10);
+    const endEl = document.getElementById("vacEnd");
+    if (days === 0) {
+      endEl.value = startVal; // 당일: 항상 시작일로 리셋
+      return;
+    }
+    const baseVal = (endEl.value && endEl.value >= startVal) ? endEl.value : startVal;
+    let end = addDays(new Date(baseVal + "T00:00:00"), days);
+    if (toISO(end) < startVal) end = new Date(startVal + "T00:00:00"); // 시작일보다 앞으로 못 감
+    endEl.value = toISO(end);
+  });
+});
+
+// ---- 데이터 모으기 / 적용하기 ----
+function collectSettings() {
+  return {
+    idCounter, roster, dayExcluded: [...dayExcluded], nightExcluded: [...nightExcluded],
+    highlighted: [...highlighted], vacations, holidays, overrides, weekOverrides,
+    continuationDayId, continuationNightId, departedPeople,
+    startDate: document.getElementById("startDate").value,
+    weeksToShow: document.getElementById("weeksToShow").value,
+    dayStart: document.getElementById("dayStart").value,
+    nightStart: document.getElementById("nightStart").value
+  };
+}
+function collectAll() { return { ...collectSettings(), historyLog }; }
+
+function applyData(data) {
+  idCounter = data.idCounter || idCounter;
+  roster = data.roster || roster;
+  dayExcluded.clear(); (data.dayExcluded || []).forEach(id => dayExcluded.add(id));
+  nightExcluded.clear(); (data.nightExcluded || []).forEach(id => nightExcluded.add(id));
+  highlighted.clear(); (data.highlighted || []).forEach(id => highlighted.add(id));
+  vacations.length = 0; (data.vacations || []).forEach(v => vacations.push(v));
+  holidays.length = 0; (data.holidays || []).forEach(h => holidays.push(h));
+  overrides.length = 0; (data.overrides || []).forEach(o => overrides.push(o));
+  weekOverrides.length = 0; (data.weekOverrides || []).forEach(w => weekOverrides.push(w));
+  if (Array.isArray(data.historyLog)) historyLog = data.historyLog;
+  departedPeople = data.departedPeople || [];
+  continuationDayId = data.continuationDayId != null ? data.continuationDayId : null;
+  continuationNightId = data.continuationNightId != null ? data.continuationNightId : null;
+  if (data.startDate) document.getElementById("startDate").value = data.startDate;
+  if (data.weeksToShow) document.getElementById("weeksToShow").value = data.weeksToShow;
+  renderRoster(); refreshDropdowns(); renderHolList(); renderVacList(); renderOvrList(); renderWkList();
+  if (data.dayStart) document.getElementById("dayStart").value = data.dayStart;
+  if (data.nightStart) document.getElementById("nightStart").value = data.nightStart;
+  const names = getNamesMap();
+  const savedDays = new Set(historyLog.map(e => e.iso)).size;
+  document.getElementById("continuationInfo").textContent = historyLog.length
+    ? `누적 저장: ${savedDays}일치 · 다음 시작 인원 — 주간: ${continuationDayId != null ? (names[continuationDayId] || '-') : '-'}, 야간: ${continuationNightId != null ? (names[continuationNightId] || '-') : '-'}`
+    : "";
+  document.getElementById("fairnessPanel").style.display = "none";
+  document.getElementById("personDetailHost").innerHTML = "";
+  if (typeof renderSavedRanges === "function") renderSavedRanges();
+}
+
+// ---- 파일로 백업 / 불러오기 ----
+async function offerDownload(filename, data) {
+  let dl = null;
+  try { dl = await claude.use("downloads"); } catch (e) { dl = null; }
+  if (!dl) {
+    // claude.ai 밖(파일로 직접 연 경우)에서는 일반 다운로드로
+    try {
+      const blob = data instanceof Blob ? data : new Blob([data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) { showToast("이 화면에서는 파일을 저장할 수 없어요."); }
+    return;
+  }
+  try {
+    await dl.save({ filename, data });
+    showToast("파일을 저장했어요.");
+  } catch (e) {
+    if (e && e.code === "declined") return;
+    if (e && e.code === "rate_limited") { showToast("잠시 후 다시 눌러주세요."); return; }
+    showToast("이 화면에서는 파일을 저장할 수 없어요.");
+  }
+}
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  offerDownload("근무표_백업.json", JSON.stringify(collectAll(), null, 2));
+});
+
+document.getElementById("importFile").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data.historyLog)) data.historyLog = [];
+      applyData(data);
+      scheduleSave(true);
+      showToast("파일을 불러왔어요. 이제부터는 자동으로 저장돼요.");
+    } catch (err) {
+      showToast("파일을 읽는 중 문제가 발생했어요. 올바른 백업 파일인지 확인해주세요.");
+    }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+
+// ---- 자동 저장 (claude.ai 저장소) ----
+let store = null;          // db 네임스페이스
+let saveMode = null;       // 'cloud'(주인: claude.ai 저장소) | 'local'(그 외: 이 기기 브라우저)
+const LOCAL_KEY = "duty-scheduler:v1";
+let storeReady = false;    // 처음 불러오기가 끝나기 전엔 저장하지 않음 (기본값이 덮어쓰는 것 방지)
+let lastSavedSettings = "";
+let lastSavedMonths = {};  // "YYYY-MM" -> JSON 문자열
+let saveTimer = null;
+let saving = false;
+let saveAgain = false;
+
+function setSaveStatus(text, tone) {
+  const el = document.getElementById("saveStatus");
+  if (!el) return;
+  el.textContent = text;
+  el.dataset.tone = tone || "";
+}
+
+function historyByMonth() {
+  const months = {};
+  historyLog.forEach(e => {
+    const m = e.iso.slice(0, 7);
+    (months[m] = months[m] || []).push(e);
+  });
+  return months;
+}
+
+function scheduleSave(immediate) {
+  if (!storeReady) return;
+  if (saveMode === 'cloud' && !store) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(runSave, immediate ? 50 : 700);
+}
+
+function hhmm() { const t = new Date(); return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`; }
+
+async function runSave() {
+  if (saveMode === 'local') {
+    try {
+      const str = JSON.stringify(collectAll());
+      if (str === lastSavedSettings) return;
+      localStorage.setItem(LOCAL_KEY, str);
+      lastSavedSettings = str;
+      setSaveStatus(`자동 저장됨 · ${hhmm()}`, "ok");
+    } catch (e) {
+      setSaveStatus("이 브라우저에서는 저장할 수 없어요. '백업 파일 받기'로 보관해주세요.", "err");
+    }
+    return;
+  }
+  if (saving) { saveAgain = true; return; }
+  saving = true;
+  try {
+    const settingsStr = JSON.stringify(collectSettings());
+    const months = historyByMonth();
+    const monthStrs = {};
+    Object.keys(months).forEach(m => { monthStrs[m] = JSON.stringify(months[m]); });
+    const changedMonths = Object.keys(monthStrs).filter(m => monthStrs[m] !== lastSavedMonths[m]);
+    const removedMonths = Object.keys(lastSavedMonths).filter(m => !(m in monthStrs));
+    if (settingsStr === lastSavedSettings && changedMonths.length === 0 && removedMonths.length === 0) return;
+
+    setSaveStatus("저장 중…", "busy");
+    if (settingsStr !== lastSavedSettings) {
+      await store.doc("app/settings").set({ json: settingsStr, savedAt: new Date().toISOString() });
+      lastSavedSettings = settingsStr;
+    }
+    for (const m of changedMonths) {
+      await store.doc("history/" + m).set({ month: m, json: monthStrs[m] });
+      lastSavedMonths[m] = monthStrs[m];
+    }
+    for (const m of removedMonths) {
+      await store.doc("history/" + m).delete();
+      delete lastSavedMonths[m];
+    }
+    const t = new Date();
+    setSaveStatus(`자동 저장됨 · ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`, "ok");
+  } catch (e) {
+    const code = e && e.code;
+    if (code === "quota_exceeded") setSaveStatus("저장 공간이 가득 찼어요. 오래된 기록을 정리해주세요.", "err");
+    else if (code === "invalid_argument") setSaveStatus("이 계정으로는 저장할 수 없어요 (보기 전용).", "err");
+    else setSaveStatus("저장하지 못했어요. 잠시 후 다시 시도할게요.", "err");
+    if (code === "unavailable") setTimeout(() => scheduleSave(true), 2000 + Math.random() * 2000);
+  } finally {
+    saving = false;
+    if (saveAgain) { saveAgain = false; scheduleSave(true); }
+  }
+}
+
+// 사용자가 무언가를 누르거나 입력할 때마다 변경 여부를 확인해 자동 저장
+["click", "change", "input"].forEach(ev => {
+  document.addEventListener(ev, () => scheduleSave(false), true);
+});
+// 처리 순서상 클릭 직후 상태가 바뀌므로, 버블 단계에서도 한 번 더 예약
+["click", "change"].forEach(ev => {
+  document.addEventListener(ev, () => scheduleSave(false));
+});
+
+function initLocal(reason) {
+  saveMode = 'local';
+  document.body.classList.remove("loading");
+  let raw = null;
+  try { raw = localStorage.getItem(LOCAL_KEY); } catch (e) { raw = null; }
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      applyData(data);
+      lastSavedSettings = raw;
+      setSaveStatus("불러옴 · 자동 저장 켜짐", "ok");
+    } catch (e) {
+      setSaveStatus("저장된 데이터를 읽지 못했어요. 백업 파일이 있으면 불러와주세요.", "err");
+    }
+  } else {
+    let ok = true;
+    try { localStorage.setItem(LOCAL_KEY + ":probe", "1"); localStorage.removeItem(LOCAL_KEY + ":probe"); } catch (e) { ok = false; }
+    setSaveStatus(ok
+      ? "자동 저장 켜짐"
+      : "자동 저장 불가 · 백업 파일 사용", ok ? "ok" : "err");
+  }
+  const note = document.getElementById("localNote");
+  if (note) note.style.display = "block";
+  storeReady = true;
+}
+
+async function initStore() {
+  setSaveStatus("저장된 데이터를 불러오는 중…", "busy");
+  let db = null, usr = null, editor = false;
+  try { [db, usr] = await Promise.all([claude.use("db"), claude.use("user")]); } catch (e) { db = null; usr = null; }
+  try { editor = usr ? await usr.canEdit() : false; } catch (e) { editor = false; }
+  if (!db || !editor) { initLocal(); return; }
+  saveMode = 'cloud';
+  store = db;
+  const timeout = setTimeout(() => setSaveStatus("저장소 연결이 늦어지고 있어요…", "busy"), 10000);
+  try {
+    const [settingsSnap, histSnap] = await Promise.all([
+      store.doc("app/settings").get(),
+      store.collection("history").limit(1000).get()
+    ]);
+    clearTimeout(timeout);
+    const data = {};
+    if (settingsSnap.exists) {
+      try { Object.assign(data, JSON.parse(settingsSnap.data().json)); } catch (e) {}
+      lastSavedSettings = settingsSnap.data().json;
+    }
+    const hist = [];
+    histSnap.docs.forEach(d => {
+      const body = d.data();
+      try {
+        const arr = JSON.parse(body.json);
+        hist.push(...arr);
+        lastSavedMonths[body.month || d.id] = body.json;
+      } catch (e) {}
+    });
+    data.historyLog = hist;
+    if (settingsSnap.exists) {
+      applyData(data);
+      setSaveStatus("저장된 데이터를 불러왔어요 · 자동 저장 켜짐", "ok");
+    } else {
+      historyLog = hist;
+      renderSavedRanges();
+      setSaveStatus("자동 저장 켜짐 · 기존 백업 파일이 있다면 '파일 불러오기'로 한 번만 넣어주세요", "ok");
+    }
+    storeReady = true;
+    document.body.classList.remove("loading");
+    if (!settingsSnap.exists) scheduleSave(true);
+  } catch (e) {
+    clearTimeout(timeout);
+    document.body.classList.remove("loading");
+    if (e && e.code === "revoked") setSaveStatus("자동 저장을 쓸 수 없어요.", "err");
+    else setSaveStatus("저장된 데이터를 불러오지 못했어요. 새로고침해서 다시 시도해주세요.", "err");
+  }
+}
+initLocal();
+
+// 오프라인 실행을 위한 서비스 워커
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+}
+
+// ---- 기록 바로잡기 ----
+function savedRangesText() {
+  const days = [...new Set(historyLog.map(e => e.iso))].sort();
+  const ranges = [];
+  days.forEach(iso => {
+    const last = ranges[ranges.length - 1];
+    if (last) {
+      const next = toISO(addDays(new Date(last.end + "T00:00:00"), 1));
+      if (next === iso) { last.end = iso; return; }
+    }
+    ranges.push({ start: iso, end: iso });
+  });
+  return ranges;
+}
+function shortDate(iso) { const d = new Date(iso + "T00:00:00"); return `${d.getFullYear() % 100}.${d.getMonth()+1}.${d.getDate()}`; }
+function renderSavedRanges() {
+  const host = document.getElementById("savedRanges");
+  if (!host) return;
+  const ranges = savedRangesText();
+  host.innerHTML = ranges.length
+    ? ranges.map(r => `<span class="chip">${shortDate(r.start)}${r.start !== r.end ? ' ~ ' + shortDate(r.end) : ''}</span>`).join("")
+    : '<span class="role-note" style="margin:0;">아직 저장된 기록이 없어요.</span>';
+}
+function allPeopleOptions() {
+  const names = getNamesMap();
+  const list = roster.map(p => ({ id: p.id, name: names[p.id], departed: false }))
+    .concat(departedPeople.map(d => ({ id: d.id, name: d.name, departed: true })));
+  return list.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+}
+function refreshFairnessIfOpen() {
+  if (document.getElementById("fairnessPanel").style.display !== "none") renderFairness();
+  document.getElementById("personDetailHost").innerHTML = "";
+}
+
+function renderFixEditor(iso) {
+  const host = document.getElementById("fixEditor");
+  const idxs = historyLog.map((e, i) => (e.iso === iso ? i : -1)).filter(i => i >= 0);
+  if (idxs.length === 0) { host.innerHTML = '<div class="role-note">이 날짜에는 저장된 기록이 없어요.</div>'; return; }
+  const people = allPeopleOptions();
+  const select = (i) => {
+    const cur = historyLog[i].personId;
+    return `<select data-fix-idx="${i}">${people.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${p.name}${p.departed ? ' (지난 인원)' : ''}</option>`).join("")}</select>`;
+  };
+  const dayIdx = idxs.filter(i => historyLog[i].type === 'day');
+  const nightIdx = idxs.filter(i => historyLog[i].type === 'night').sort((a, b) => historyLog[a].team - historyLog[b].team);
+  const extraIdx = idxs.filter(i => historyLog[i].type === 'extra').sort((a, b) => (historyLog[a].slot || 0) - (historyLog[b].slot || 0));
+
+  let html = `<div style="font-size:13px;font-weight:700;">${fmtDate(new Date(iso + "T00:00:00"))} 저장된 기록</div>`;
+  if (dayIdx.length) {
+    html += `<div class="fix-group">주간 ${historyLog[dayIdx[0]].dayKind || ''}</div>`;
+    dayIdx.forEach((i, n) => { html += `<div class="fix-row"><span class="lbl">${n + 1}번째</span>${select(i)}</div>`; });
+  }
+  if (nightIdx.length) {
+    html += `<div class="fix-group">야간</div>`;
+    const seen = {};
+    nightIdx.forEach(i => {
+      const t = historyLog[i].team;
+      seen[t] = (seen[t] || 0) + 1;
+      html += `<div class="fix-row"><span class="lbl">${nightTeamTime(t)} ${seen[t] === 1 ? '①' : '②'}</span>${select(i)}</div>`;
+    });
+  }
+  if (extraIdx.length) {
+    html += `<div class="fix-group">야간 연장</div>`;
+    extraIdx.forEach(i => { html += `<div class="fix-row"><span class="lbl">${historyLog[i].slot === 0 ? '06:00–06:30' : '06:30–07:00'}</span>${select(i)}</div>`; });
+  }
+  html += `<div class="settings-row" style="margin-top:10px;"><button id="fixApply">변경 저장</button></div>`;
+  host.innerHTML = html;
+
+  document.getElementById("fixApply").addEventListener("click", async () => {
+    const sels = host.querySelectorAll("select[data-fix-idx]");
+    const changes = [];
+    sels.forEach(sel => {
+      const i = parseInt(sel.dataset.fixIdx, 10);
+      const nv = parseInt(sel.value, 10);
+      if (historyLog[i] && historyLog[i].personId !== nv) changes.push([i, nv]);
+    });
+    if (changes.length === 0) { showToast("바뀐 칸이 없어요."); return; }
+    if (!(await askConfirm(`${changes.length}칸을 바꿔서 저장할까요?\n공정표 집계에도 바로 반영돼요.`))) return;
+    changes.forEach(([i, nv]) => { historyLog[i] = { ...historyLog[i], personId: nv }; });
+    renderSavedRanges();
+    refreshFairnessIfOpen();
+    renderFixEditor(iso);
+    scheduleSave(true);
+    showToast("기록을 고쳤어요.");
+  });
+}
+
+document.getElementById("fixLoad").addEventListener("click", () => {
+  const iso = document.getElementById("fixDate").value;
+  if (!iso) { showToast("날짜를 선택해주세요."); return; }
+  renderFixEditor(iso);
+});
+document.getElementById("fixDate").addEventListener("change", () => {
+  const iso = document.getElementById("fixDate").value;
+  if (iso) renderFixEditor(iso);
+});
+
+let fixRangeBackup = null;
+function hideFixUndo() { const el = document.getElementById("fixUndo"); el.style.display = "none"; el.innerHTML = ""; }
+document.getElementById("fixRangeStart").addEventListener("change", () => {
+  const sv = document.getElementById("fixRangeStart").value;
+  const endEl = document.getElementById("fixRangeEnd");
+  if (sv && (!endEl.value || endEl.value < sv)) endEl.value = sv;
+});
+document.getElementById("fixRangeDelete").addEventListener("click", async () => {
+  const st = document.getElementById("fixRangeStart").value;
+  const en = document.getElementById("fixRangeEnd").value;
+  if (!st || !en) { showToast("시작일과 종료일을 선택해주세요."); return; }
+  if (st > en) { showToast("종료일이 시작일보다 빠를 수 없어요."); return; }
+  const removed = historyLog.filter(e => e.iso >= st && e.iso <= en);
+  if (removed.length === 0) { showToast("이 기간에는 저장된 기록이 없어요."); return; }
+  const dayCount = new Set(removed.map(e => e.iso)).size;
+  if (!(await askConfirm(`${shortDate(st)} ~ ${shortDate(en)} 기록(${dayCount}일치, ${removed.length}건)을 삭제할까요?\n공정표 집계에서도 빠져요.`))) return;
+  fixRangeBackup = removed;
+  historyLog = historyLog.filter(e => !(e.iso >= st && e.iso <= en));
+  renderSavedRanges();
+  refreshFairnessIfOpen();
+  document.getElementById("fixEditor").innerHTML = "";
+  scheduleSave(true);
+
+  const el = document.getElementById("fixUndo");
+  el.style.display = "flex";
+  el.innerHTML = `<span>${dayCount}일치 기록을 삭제했어요.</span>`;
+  const btn = document.createElement("button");
+  btn.className = "secondary"; btn.textContent = "되돌리기";
+  btn.addEventListener("click", () => {
+    if (!fixRangeBackup) return;
+    historyLog = historyLog.concat(fixRangeBackup);
+    fixRangeBackup = null;
+    hideFixUndo();
+    renderSavedRanges();
+    refreshFairnessIfOpen();
+    scheduleSave(true);
+    showToast("삭제한 기록을 되돌렸어요.");
+  });
+  el.appendChild(btn);
+});
+
+// 기록이 바뀔 수 있는 동작 뒤에 저장된 기간 표시를 갱신
+document.addEventListener("click", () => setTimeout(renderSavedRanges, 0));
+renderSavedRanges();
+
+// ---- 스케줄 생성 ----
+const WEEKDAY_KR = ["일","월","화","수","목","금","토"];
+function fmtDate(d) { return `${d.getMonth()+1}/${d.getDate()}(${WEEKDAY_KR[d.getDay()]})`; }
+function nightTeamTime(team) {
+  switch (team) {
+    case 1: return "22–24시";
+    case 2: return "00–02시";
+    case 3: return "02–04시";
+    case 4: return "04–06시";
+    default: return "";
+  }
+}
+function toISO(d) {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function addDays(d, n) { const nd = new Date(d); nd.setDate(d.getDate() + n); return nd; }
+
+function isHoliday(iso, dateObj) {
+  const wd = dateObj.getDay();
+  if (wd === 0 || wd === 6) return true;
+  return holidays.some(h => h.date === iso);
+}
+// ---- 적응 기간 / 종료일 ----
+function rosterPerson(id) { return roster.find(p => p.id === id); }
+function protectStartISO(p) {
+  if (!p || !p.joinDate) return null;
+  const w = Number.isFinite(p.protectWeeks) ? p.protectWeeks : 4;
+  return toISO(addDays(new Date(p.joinDate + "T00:00:00"), w * 7)); // 이 날부터 근무
+}
+function dischargeCutISO(p) {
+  if (!p || !p.dischargeDate) return null;
+  return toISO(addDays(new Date(p.dischargeDate + "T00:00:00"), -1)); // 종료일 전날부터 근무 없음
+}
+function isInactive(personId, isoDate) {
+  const p = rosterPerson(personId);
+  if (!p) return false;
+  const ps = protectStartISO(p);
+  if (ps && isoDate < ps) return true;
+  const dc = dischargeCutISO(p);
+  if (dc && isoDate >= dc) return true;
+  return false;
+}
+function isOnVacationDay(personId, isoDate) {
+  if (isInactive(personId, isoDate)) return true;
+  return vacations.some(v => v.person === personId && isoDate >= v.start && isoDate <= v.end);
+}
+function isOnVacationNight(personId, isoDate) {
+  if (isInactive(personId, isoDate)) return true;
+  return vacations.some(v => {
+    const nightExcludeEnd = toISO(addDays(new Date(v.end + "T00:00:00"), -1));
+    return personId === v.person && isoDate >= v.start && isoDate <= nightExcludeEnd;
+  });
+}
+function takeAvailable(pool, ptr, count, availableFn) {
+  const out = [];
+  let p = ptr, guard = 0;
+  while (out.length < count && guard < pool.length * 5) {
+    const candidate = pool[((p % pool.length) + pool.length) % pool.length];
+    if (availableFn(candidate)) out.push(candidate);
+    p++; guard++;
+  }
+  return { assigned: out, newPtr: ((p % pool.length) + pool.length) % pool.length };
+}
+
+async function generateSchedule() {
+  const names = getNamesMap();
+  const startVal = document.getElementById("startDate").value;
+  if (!startVal) { showToast("시작일을 선택해주세요."); return; }
+  const startDate = new Date(startVal + "T00:00:00");
+  if (startDate.getDay() !== 1) {
+    if (!await askConfirm("선택한 날짜가 월요일이 아니에요. 그대로 진행할까요?")) return;
+  }
+  const weeksToShow = parseInt(document.getElementById("weeksToShow").value, 10);
+
+  const dayPool = roster.filter(p => !dayExcluded.has(p.id)).map(p => p.id);
+  const nightPool = roster.map(p => p.id).slice().reverse();
+
+  const dayStartId = parseInt(document.getElementById("dayStart").value, 10);
+  const nightStartId = parseInt(document.getElementById("nightStart").value, 10);
+  let dayPtr = Math.max(0, dayPool.indexOf(dayStartId));
+  let nightPtr = Math.max(0, nightPool.indexOf(nightStartId));
+
+  const rows = [];
+  const totalDays = weeksToShow * 7;
+
+  const overrideMap = new Map(overrides.map(o => [o.date, o]));
+  const weekOverrideMap = new Map(weekOverrides.map(w => [w.monday, w.mode]));
+
+  // ---- 1단계: 요일별 기본 정보 + 기본 주간 유형(full/transition/none) 계산 ----
+  const ctx = [];
+  for (let i = 0; i < totalDays; i++) {
+    const date = addDays(startDate, i);
+    const iso = toISO(date);
+    const weekday = date.getDay();
+    const weekIndex = Math.floor(i / 7);
+    const weekMondayIso = toISO(addDays(startDate, weekIndex * 7));
+    const weekOvr = weekOverrideMap.get(weekMondayIso);
+    const isWorkWeek = weekOvr === 'work' ? true : (weekOvr === 'off' ? false : (weekIndex % 2 === 0));
+    const holidayToday = isHoliday(iso, date);
+    const nextDate = addDays(date, 1);
+    const nextIso = toISO(nextDate);
+    const holidayTomorrow = isHoliday(nextIso, nextDate);
+    const ovr = overrideMap.get(iso); // {mode, scope} | undefined
+    const ovrMode = ovr ? ovr.mode : undefined;
+    const ovrScope = ovr ? (ovr.scope || 'full') : 'full'; // 조정 없는 날은 항상 'full' 취급(자연 상태)
+
+    let dayType; // 'full' | 'transition' | 'none'
+    if (ovrMode === 'remove') {
+      // 두 그룹 간 교대는 무조건 09시이므로, 전날 상태와 무관하게 이 날 자체가 06~09시 전환 근무가 된다.
+      if (holidayToday) dayType = 'none';
+      else if (ovrScope === 'full' && weekday >= 1 && weekday <= 5) dayType = 'transition';
+      else dayType = 'none';
+    }
+    else if (holidayToday) dayType = 'none';
+    else if (ovrMode === 'add') dayType = 'full';
+    else if (isWorkWeek && weekday >= 1 && weekday <= 5) dayType = 'full';
+    else if (!isWorkWeek && weekday === 1) dayType = 'transition'; // 기존 휴무주 월요일 고정 규칙
+    else dayType = 'none';
+
+    // 이 날 밤 우리 그룹 야간 근무가 있는지 (주간만 조정은 야간에 영향 없음)
+    const nightWork = (ovrMode && ovrScope === 'full') ? (ovrMode === 'add') : isWorkWeek;
+
+    ctx.push({ date, iso, weekday, isWorkWeek, holidayToday, holidayTomorrow, ovrMode, ovrScope, dayType, nightWork, transitionReason: dayType === 'transition' ? (ovrMode === 'remove' ? 'removed-handoff' : 'fixed-monday') : null });
+  }
+
+  // ---- 1.5단계: 휴무주 월요일 06~09시 인수인계는 전날(일요일) 밤에 우리 그룹 야간이 있었을 때만 발생 ----
+  // 휴무주가 연속되면 두 번째 휴무주 월요일엔 넘겨받을 근무가 없으므로 근무가 없어야 한다.
+  for (let i = 0; i < ctx.length; i++) {
+    if (ctx[i].transitionReason !== 'fixed-monday') continue;
+    let prevNightWork;
+    if (i > 0) prevNightWork = ctx[i - 1].nightWork;
+    else prevNightWork = (Math.floor(-1 / 7) % 2 === 0); // 시작일 이전 주는 기본 격주 패턴 기준
+    if (!prevNightWork) {
+      ctx[i].dayType = 'none';
+      ctx[i].transitionReason = null;
+    }
+  }
+
+  // ---- 2단계: 근무 추가 조정으로 생긴 경계에 06~09시 전환 근무 자동 적용 (다음날이 원래 휴무였던 경우) ----
+  // "주간만" 범위로 바뀐 날은 야간이 그대로라 그룹 교대가 이미 그날 밤부터 자연스럽게 이뤄지므로 전환 근무가 붙지 않는다.
+  for (let i = 1; i < ctx.length; i++) {
+    if (ctx[i].dayType === 'none' && ctx[i - 1].dayType === 'full' && ctx[i - 1].ovrScope === 'full' && ctx[i].ovrScope === 'full') {
+      const wd = ctx[i].weekday;
+      if (wd >= 1 && wd <= 5 && !ctx[i].holidayToday) {
+        ctx[i].dayType = 'transition';
+        ctx[i].transitionReason = 'adjacent';
+      }
+    }
+  }
+
+  // ---- 3단계: 실제 인원 배정 (날짜 순서대로, 포인터 이어짐) ----
+  for (let i = 0; i < ctx.length; i++) {
+    const c = ctx[i];
+    let dayDuty = null, dayLabel = "";
+
+    if (c.dayType === 'full' || c.dayType === 'transition') {
+      const r = takeAvailable(dayPool, dayPtr, 3, (p) => !isOnVacationDay(p, c.iso));
+      dayDuty = r.assigned; dayPtr = r.newPtr;
+      if (c.dayType === 'full') {
+        // 이 근무 구간의 첫날(전날이 근무일이 아니었던 경우)은 06~09시가 인수인계 측 담당이라 09시부터 시작한다.
+        const isStreakStart = c.ovrScope === 'full' && i > 0 && ctx[i - 1].dayType !== 'full';
+        const baseHours = isStreakStart ? "09–18시" : "06–18시";
+        if (c.ovrMode === 'add') dayLabel = c.ovrScope === 'day' ? "06–18시 (주간만 추가)" : `${baseHours} (수동 추가)`;
+        else dayLabel = baseHours;
+      } else {
+        dayLabel = (c.transitionReason === 'adjacent' || c.transitionReason === 'removed-handoff') ? "06–09시 (근무 전환)" : "06–09시 (휴무주)";
+      }
+    }
+
+    // 야간은 "주간+야간 전체" 범위의 조정에만 영향받는다. "주간만" 조정은 야간을 원래 패턴 그대로 둔다.
+    let effectiveWorkWeek;
+    if (c.ovrMode && c.ovrScope === 'full') effectiveWorkWeek = (c.ovrMode === 'add');
+    else effectiveWorkWeek = c.isWorkWeek;
+
+    let nightDuty = null, extra = null;
+    if (effectiveWorkWeek) {
+      const nightAvail = (p) => {
+        if (isOnVacationNight(p, c.iso)) return false;
+        if (nightExcluded.has(p) && !c.holidayTomorrow) return false;
+        return true;
+      };
+      const rn = takeAvailable(nightPool, nightPtr, 8, nightAvail);
+      nightDuty = rn.assigned; nightPtr = rn.newPtr;
+      if (c.holidayTomorrow) {
+        const re = takeAvailable(nightPool, nightPtr, 2, nightAvail);
+        extra = re.assigned; nightPtr = re.newPtr;
+      }
+    }
+
+    rows.push({ date: c.date, iso: c.iso, weekday: c.weekday, isWorkWeek: c.isWorkWeek, ovrMode: c.ovrMode, ovrScope: c.ovrScope, holidayToday: c.holidayToday, holidayLabel: (holidays.find(h=>h.date===c.iso)||{}).label, dayDuty, dayLabel, nightDuty, extra });
+  }
+
+  // 이번 생성이 끝난 시점에 "다음 사람"이 될 후보를 계산해둔다 (저장을 눌러야 실제로 확정됨)
+  pendingNextDayId = dayPool.length ? dayPool[((dayPtr % dayPool.length) + dayPool.length) % dayPool.length] : null;
+  pendingNextNightId = nightPool.length ? nightPool[((nightPtr % nightPool.length) + nightPool.length) % nightPool.length] : null;
+
+  renderTable(names, rows);
+  lastScheduleNames = names;
+  lastScheduleRows = rows;
+  document.getElementById("fairnessPanel").style.display = "none";
+  document.getElementById("personDetailHost").innerHTML = "";
+}
+
+let lastScheduleNames = null;
+let lastScheduleRows = null;
+
+document.getElementById("genFairness").addEventListener("click", () => {
+  if (historyLog.length === 0) { showToast("아직 저장된 기록이 없어요. 먼저 근무표를 생성하고 '이 결과를 기록에 저장'을 눌러주세요."); return; }
+  renderFairness();
+  document.getElementById("personDetailHost").innerHTML = "";
+});
+
+document.getElementById("saveHistory").addEventListener("click", () => {
+  if (!lastScheduleRows) { showToast("먼저 근무표를 생성해주세요."); return; }
+  const isoSet = new Set(lastScheduleRows.map(r => r.iso));
+  historyLog = historyLog.filter(e => !isoSet.has(e.iso)); // 같은 날짜 재생성 시 중복 방지, 최신 결과로 교체
+  lastScheduleRows.forEach(r => {
+    if (r.dayDuty) r.dayDuty.forEach(id => historyLog.push({ iso: r.iso, personId: id, type: 'day', dayKind: r.dayLabel }));
+    if (r.nightDuty) r.nightDuty.forEach((id, idx) => historyLog.push({ iso: r.iso, personId: id, type: 'night', team: Math.floor(idx / 2) + 1 }));
+    if (r.extra) r.extra.forEach((id, idx) => historyLog.push({ iso: r.iso, personId: id, type: 'extra', slot: idx }));
+  });
+
+  if (pendingNextDayId != null) continuationDayId = pendingNextDayId;
+  if (pendingNextNightId != null) continuationNightId = pendingNextNightId;
+  const names = getNamesMap();
+  const dayStartSel = document.getElementById("dayStart");
+  const nightStartSel = document.getElementById("nightStart");
+  if (continuationDayId != null && [...dayStartSel.options].some(o => o.value === String(continuationDayId))) dayStartSel.value = continuationDayId;
+  if (continuationNightId != null && [...nightStartSel.options].some(o => o.value === String(continuationNightId))) nightStartSel.value = continuationNightId;
+
+  const savedDays = new Set(historyLog.map(e => e.iso)).size;
+  document.getElementById("continuationInfo").textContent =
+    `누적 저장: ${savedDays}일치 · 다음 시작 인원 자동 설정됨 — 주간: ${continuationDayId != null ? names[continuationDayId] : '-'}, 야간: ${continuationNightId != null ? names[continuationNightId] : '-'}`;
+
+  showToast(`기록에 저장했어요. (누적 ${savedDays}일치)\n다음 생성 때는 주간/야간 시작 인원이 이어서 자동 선택돼요.`);
+});
+
+function fmtMinutes(totalMin) {
+  const m = ((totalMin % 1440) + 1440) % 1440;
+  const hh = String(Math.floor(m / 60)).padStart(2, "0");
+  const mm = String(m % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+function timeSlot(startMin) { return `${fmtMinutes(startMin)}–${fmtMinutes(startMin + 30)}`; }
+
+document.getElementById("exportExcel").addEventListener("click", () => {
+  if (!lastScheduleRows) { showToast("먼저 근무표를 생성해주세요."); return; }
+  if (typeof XLSX === "undefined") { showToast("엑셀 변환 라이브러리를 불러오지 못했어요. 인터넷 연결을 확인해주세요."); return; }
+
+  const names = lastScheduleNames;
+  const rowsOut = [];
+
+  lastScheduleRows.forEach(r => {
+    const dateStr = `${r.date.getFullYear()}-${String(r.date.getMonth()+1).padStart(2,'0')}-${String(r.date.getDate()).padStart(2,'0')}`;
+    const weekdayStr = WEEKDAY_KR[r.weekday];
+    const weekStr = r.isWorkWeek ? "근무주" : "휴무주";
+    const holidayStr = r.holidayToday ? ` · 공휴일${r.holidayLabel ? ' '+r.holidayLabel : ''}` : "";
+
+    rowsOut.push([`${dateStr} (${weekdayStr}) — ${weekStr}${holidayStr}`]);
+    rowsOut.push(["시간대", "담당"]);
+
+    // 주간: dayLabel에서 시작~종료 시각을 읽어 30분 슬롯으로 3명 순환 배정
+    if (r.dayDuty && r.dayDuty.length) {
+      const m = (r.dayLabel || "").match(/(\d{2})[–-](\d{2})/);
+      const startHour = m ? parseInt(m[1], 10) : 6;
+      const endHour = m ? parseInt(m[2], 10) : 18;
+      const slots = (endHour - startHour) * 2;
+      rowsOut.push([`주간 (${String(startHour).padStart(2,'0')}:00–${String(endHour).padStart(2,'0')}:00)`]);
+      for (let s = 0; s < slots; s++) {
+        const startMin = startHour * 60 + s * 30;
+        const person = r.dayDuty[s % r.dayDuty.length];
+        rowsOut.push([timeSlot(startMin), names[person]]);
+      }
+    } else {
+      rowsOut.push(["주간", "휴무"]);
+    }
+
+    rowsOut.push([]);
+
+    // 야간: 팀별 2시간 블록, 2명이 30분씩 번갈아 4슬롯
+    if (r.nightDuty && r.nightDuty.length) {
+      rowsOut.push(["야간"]);
+      const teamStarts = [22*60, 0, 2*60, 4*60]; // 22-24, 00-02, 02-04, 04-06
+      for (let t = 0; t < 4; t++) {
+        const a = r.nightDuty[t*2], b = r.nightDuty[t*2+1];
+        if (a === undefined) continue;
+        const teamStartMin = teamStarts[t];
+        rowsOut.push([`${fmtMinutes(teamStartMin)}–${fmtMinutes(teamStartMin+120)}`]);
+        for (let s = 0; s < 4; s++) {
+          const startMin = teamStartMin + s * 30;
+          const person = (s % 2 === 0) ? a : b;
+          rowsOut.push([timeSlot(startMin), names[person]]);
+        }
+      }
+      if (r.extra && r.extra.length === 2) {
+        rowsOut.push(["야간 연장"]);
+        rowsOut.push([timeSlot(6*60), names[r.extra[0]]]);
+        rowsOut.push([timeSlot(6*60+30), names[r.extra[1]]]);
+      }
+    } else {
+      rowsOut.push(["야간", "휴무"]);
+    }
+
+    rowsOut.push([]);
+    rowsOut.push([]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rowsOut);
+  ws["!cols"] = [{wch:16},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "근무표");
+  const xlsxArr = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  offerDownload("근무표.xlsx", new Blob([xlsxArr]));
+});
+
+document.getElementById("clearHistory").addEventListener("click", async () => {
+  if (historyLog.length === 0) { showToast("초기화할 기록이 없어요."); return; }
+  if (!await askConfirm("누적된 근무 기록을 전부 삭제할까요? 이 작업은 되돌릴 수 없어요.")) return;
+  historyLog = [];
+  continuationDayId = null;
+  continuationNightId = null;
+  document.getElementById("continuationInfo").textContent = "";
+  document.getElementById("fairnessPanel").style.display = "none";
+  document.getElementById("personDetailHost").innerHTML = "";
+  showToast("기록을 초기화했어요.");
+});
+
+let lastDeletedBackup = null; // {person:{id,name}, entries:[...]} — 완전삭제 직후 되돌리기용 (1건만 보관)
+
+function getDisplayName(id) {
+  const active = getNamesMap();
+  if (active[id] !== undefined) return active[id];
+  const dep = departedPeople.find(d => d.id === id);
+  return dep ? dep.name : `(알 수 없음)`;
+}
+
+let fairnessSortMode = "name"; // 'name' | 'ratioAsc' | 'ratioDesc'
+
+function buildFairnessTable(people, counts, opts) {
+  // people: [{id, name}], counts: {id: {hard, easy}}
+  const showDelete = opts && opts.showDelete;
+  let html = "<table><thead><tr><th>이름</th><th>힘든 시간대<br>(02–06시)</th><th>22–02시 + 연장</th><th>합계</th><th>힘든 비율</th>" + (showDelete ? "<th></th>" : "") + "</tr></thead><tbody>";
+  people.forEach(p => {
+    const c = counts[p.id] || { hard: 0, easy: 0 };
+    const total = c.hard + c.easy;
+    const ratioStr = total > 0 ? `${Math.round((c.hard / total) * 100)}%` : "-";
+    const nameCell = highlighted.has(p.id) ? `<span class="team hl">${p.name}</span>` : p.name;
+    html += `<tr><td><button class="secondary" data-person="${p.id}" style="padding:4px 10px;font-size:12.5px;">${nameCell}</button></td><td>${c.hard}</td><td>${c.easy}</td><td><b>${total}</b></td><td>${ratioStr}</td>`;
+    if (showDelete) {
+      html += `<td><button class="danger" data-permadelete="${p.id}">완전삭제</button></td>`;
+    }
+    html += `</tr>`;
+  });
+  html += "</tbody></table>";
+  return html;
+}
+
+function sortFairnessPeople(people, counts) {
+  const withRatio = people.map(p => {
+    const c = counts[p.id] || { hard: 0, easy: 0 };
+    const total = c.hard + c.easy;
+    const ratio = total > 0 ? c.hard / total : -1; // 데이터 없는 사람은 맨 뒤로
+    return { ...p, ratio };
+  });
+  if (fairnessSortMode === "ratioAsc") withRatio.sort((a, b) => a.ratio - b.ratio);
+  else if (fairnessSortMode === "ratioDesc") withRatio.sort((a, b) => b.ratio - a.ratio);
+  return withRatio;
+}
+
+function hideUndoBanner() {
+  const banner = document.getElementById("undoBanner");
+  banner.style.display = "none";
+  banner.innerHTML = "";
+}
+
+function showUndoBanner(name) {
+  const banner = document.getElementById("undoBanner");
+  banner.style.display = "flex";
+  banner.innerHTML = `<span>${name}님의 기록을 완전히 삭제했어요.</span>`;
+  const btn = document.createElement("button");
+  btn.className = "secondary";
+  btn.textContent = "되돌리기";
+  btn.addEventListener("click", () => {
+    if (!lastDeletedBackup) return;
+    departedPeople.push(lastDeletedBackup.person);
+    historyLog.push(...lastDeletedBackup.entries);
+    lastDeletedBackup = null;
+    hideUndoBanner();
+    renderFairness();
+  });
+  banner.appendChild(btn);
+}
+
+document.querySelectorAll('#fairnessPanel .tab-btn[data-sort]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    fairnessSortMode = btn.dataset.sort;
+    document.querySelectorAll('#fairnessPanel .tab-btn[data-sort]').forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    renderFairness();
+  });
+});
+
+function renderFairness() {
+  const names = getNamesMap();
+  const panel = document.getElementById("fairnessPanel");
+  panel.style.display = "block";
+  const host = document.getElementById("fairnessHost");
+
+  const activeCounts = {};
+  roster.forEach(p => { activeCounts[p.id] = { hard: 0, easy: 0 }; });
+  const departedCounts = {};
+  departedPeople.forEach(d => { departedCounts[d.id] = { hard: 0, easy: 0 }; });
+
+  historyLog.forEach(e => {
+    let target = activeCounts[e.personId] || departedCounts[e.personId];
+    if (!target) return; // 어느 목록에도 없는(알 수 없는) id는 건너뜀
+    if (e.type === 'night') {
+      if (e.team >= 3) target.hard++; else target.easy++;
+    } else if (e.type === 'extra') {
+      target.easy++;
+    }
+  });
+
+  let sortedActive = roster.map(p => ({ id: p.id, name: names[p.id] }));
+  sortedActive = fairnessSortMode === "name"
+    ? sortedActive.sort((a, b) => a.name.localeCompare(b.name, "ko"))
+    : sortFairnessPeople(sortedActive, activeCounts);
+
+  let html = buildFairnessTable(sortedActive, activeCounts);
+
+  if (departedPeople.length > 0) {
+    let sortedDeparted = departedPeople.slice();
+    sortedDeparted = fairnessSortMode === "name"
+      ? sortedDeparted.sort((a, b) => a.name.localeCompare(b.name, "ko"))
+      : sortFairnessPeople(sortedDeparted, departedCounts);
+    html += `<div class="detail-section-title" id="departedToggle" style="cursor:pointer;user-select:none;">▶ 지난 인원 (${departedPeople.length}명) — 눌러서 펼치기</div>`;
+    html += `<div id="departedSection" style="display:none;">${buildFairnessTable(sortedDeparted, departedCounts, { showDelete: true })}</div>`;
+  }
+
+  host.innerHTML = html;
+
+  host.querySelectorAll("button[data-person]").forEach(btn => {
+    btn.addEventListener("click", () => renderPersonDetail(parseInt(btn.dataset.person, 10)));
+  });
+
+  host.querySelectorAll("button[data-permadelete]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = parseInt(btn.dataset.permadelete, 10);
+      const person = departedPeople.find(d => d.id === id);
+      if (!person) return;
+      const entryCount = historyLog.filter(e => e.personId === id).length;
+      if (!await askConfirm(`${person.name}님의 근무 기록(${entryCount}건)을 영구히 삭제할까요?\n삭제 후에도 바로 '되돌리기'로 복구할 수 있지만, 다른 인원을 삭제하거나 페이지를 벗어나면 되돌릴 수 없어요.`)) return;
+
+      const entries = historyLog.filter(e => e.personId === id);
+      lastDeletedBackup = { person: { ...person }, entries };
+
+      departedPeople = departedPeople.filter(d => d.id !== id);
+      historyLog = historyLog.filter(e => e.personId !== id);
+
+      showUndoBanner(person.name);
+      renderFairness();
+      document.getElementById("personDetailHost").innerHTML = "";
+    });
+  });
+
+  const toggle = document.getElementById("departedToggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const section = document.getElementById("departedSection");
+      const isOpen = section.style.display !== "none";
+      section.style.display = isOpen ? "none" : "block";
+      toggle.textContent = `${isOpen ? '▶' : '▼'} 지난 인원 (${departedPeople.length}명) — 눌러서 ${isOpen ? '펼치기' : '접기'}`;
+    });
+  }
+}
+
+function renderPersonDetail(personId) {
+  const host = document.getElementById("personDetailHost");
+  const displayName = getDisplayName(personId);
+  const myEntries = historyLog.filter(e => e.personId === personId).slice().sort((a, b) => a.iso.localeCompare(b.iso));
+
+  const dayEntries = myEntries.filter(e => e.type === 'day');
+  const nightEntries = myEntries.filter(e => e.type === 'night' || e.type === 'extra');
+
+  let html = `<div class="panel" style="background:#faf9f6;max-height:420px;overflow-y:auto;"><h2>${displayName}님의 누적 일정 (${myEntries.length}건)</h2>`;
+
+  if (myEntries.length === 0) {
+    html += `<div class="role-note">저장된 기록이 없어요.</div></div>`;
+    host.innerHTML = html;
+    return;
+  }
+
+  html += `<div class="detail-section-title" style="margin-top:0;">주간 (${dayEntries.length}건)</div>`;
+  if (dayEntries.length === 0) {
+    html += `<div class="role-note">없음</div>`;
+  } else {
+    const dayLabels = dayEntries.map(e => fmtDate(new Date(e.iso + "T00:00:00")));
+    html += `<div style="font-size:12.5px;line-height:1.9;">${dayLabels.join(' · ')}</div>`;
+  }
+
+  html += `<div class="detail-section-title">야간 (${nightEntries.length}건)</div>`;
+  if (nightEntries.length === 0) {
+    html += `<div class="role-note">없음</div>`;
+  } else {
+    html += `<table class="detail-table"><tbody>`;
+    nightEntries.forEach(e => {
+      const dateLabel = fmtDate(new Date(e.iso + "T00:00:00"));
+      let timeLabel, numLabel;
+      if (e.type === 'night') {
+        timeLabel = nightTeamTime(e.team);
+        numLabel = e.team;
+      } else {
+        timeLabel = e.slot === 0 ? "06:00–06:30" : "06:30–07:00";
+        numLabel = "연";
+      }
+      html += `<tr><td>${dateLabel}</td><td>${timeLabel}</td><td class="num">(${numLabel})</td></tr>`;
+    });
+    html += `</table>`;
+  }
+  html += `</div>`;
+  host.innerHTML = html;
+}
+
+
+function gridHTML(names, rows) {
+  const nameSpan = (id) => `<span class="team ${highlighted.has(id) ? 'hl' : ''}">${names[id]}</span>`;
+  const cell = (cls, ids) => (ids && ids.length)
+    ? `<td class="${cls}">${ids.map(nameSpan).join("")}</td>`
+    : `<td class="empty">·</td>`;
+  const md = (d) => `${d.getMonth()+1}/${d.getDate()}`;
+
+  let html = `<table class="grid"><colgroup><col class="c-date"><col class="c-day"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-n"><col class="c-x"></colgroup>
+    <thead><tr><th>날짜</th><th>주간</th><th>22–24</th><th>00–02</th><th>02–04</th><th>04–06</th><th>06–07</th></tr></thead><tbody>`;
+
+  let lastWk = null;
+  rows.forEach((r, i) => {
+    // 주 구분 줄
+    const wkKey = toISO(addDays(r.date, -((r.weekday + 6) % 7)));
+    if (wkKey !== lastWk) {
+      lastWk = wkKey;
+      const mon = new Date(wkKey + "T00:00:00");
+      const sun = addDays(mon, 6);
+      html += `<tr class="wk ${r.isWorkWeek ? '' : 'off'}"><td colspan="7">${md(mon)} ~ ${md(sun)}<span class="wk-sub">${r.isWorkWeek ? '근무주' : '휴무주'}</span></td></tr>`;
+    }
+    const hasDay = r.dayDuty && r.dayDuty.length;
+    const hasNight = r.nightDuty && r.nightDuty.length;
+    const hasExtra = r.extra && r.extra.length;
+    if (!hasDay && !hasNight && !hasExtra) return; // 근무 없는 날은 숨김
+
+    const we = r.weekday === 0 || r.weekday === 6;
+    let ovTag = "";
+    if (r.ovrMode === 'add') ovTag = `<span class="ov">+근무${r.ovrScope === 'day' ? '(주)' : ''}</span>`;
+    if (r.ovrMode === 'remove') ovTag = `<span class="ov rm">−근무${r.ovrScope === 'day' ? '(주)' : ''}</span>`;
+    const holTitle = r.holidayToday && r.holidayLabel ? ` title="${r.holidayLabel}"` : "";
+    html += `<tr class="${we ? 'we' : ''} ${r.holidayToday && !we ? 'hol' : ''}">`;
+    html += `<td class="d"${holTitle}><span class="dn">${r.date.getDate()}</span><span class="dw">${WEEKDAY_KR[r.weekday]}${r.holidayToday && !we ? '·휴' : ''}</span>${ovTag}</td>`;
+
+    if (hasDay) {
+      const m = (r.dayLabel || "").match(/^(\d{2})–(\d{2})/);
+      const tag = m && !(m[1] === "06" && m[2] === "18") ? `<span class="tm">${m[1]}–${m[2]}</span>` : "";
+      html += `<td class="day">${tag}${r.dayDuty.map(nameSpan).join("")}</td>`;
+    } else {
+      html += `<td class="empty">·</td>`;
+    }
+    for (let t = 0; t < 4; t++) {
+      const pair = hasNight ? r.nightDuty.slice(t * 2, t * 2 + 2) : [];
+      html += pair.length ? `<td class="n ${t >= 2 ? 'hard' : ''}">${pair.map(nameSpan).join("")}</td>` : `<td class="empty">·</td>`;
+    }
+    html += cell("x", hasExtra ? r.extra : null);
+    html += "</tr>";
+  });
+
+  html += "</tbody></table>";
+  return html;
+}
+
+function renderTable(names, rows) {
+  const panel = document.getElementById("resultPanel");
+  panel.style.display = "block";
+  const host = document.getElementById("tableHost");
+  const md = (d) => `${d.getMonth()+1}/${d.getDate()}`;
+  host.innerHTML = gridHTML(names, rows);
+  if (typeof applyScheduleSearch === "function") applyScheduleSearch();
+
+  // 생성 설정은 접고 요약만 보이게
+  const box = document.getElementById("genBox");
+  const sum = document.getElementById("genSummary");
+  if (box && sum && rows.length) {
+    const nm = getNamesMap();
+    const ds = document.getElementById("dayStart").value, ns = document.getElementById("nightStart").value;
+    sum.textContent = `${md(rows[0].date)}부터 ${document.getElementById("weeksToShow").value}주 · 주간 ${nm[ds] || '-'} · 야간 ${nm[ns] || '-'}`;
+    box.open = false;
+  }
+}
+
+
+// ---- 지난 기록 보기 ----
+let pastYear = null, pastMonth = null; // month: 0~11
+function allNamesMap() {
+  const m = getNamesMap();
+  departedPeople.forEach(d => { if (m[d.id] === undefined) m[d.id] = d.name; });
+  return new Proxy(m, { get: (t, k) => (k in t ? t[k] : "?") });
+}
+function historyRowsForMonth(y, mo) {
+  const prefix = `${y}-${String(mo + 1).padStart(2, "0")}`;
+  const byDay = {};
+  historyLog.forEach(e => { if (e.iso.startsWith(prefix)) (byDay[e.iso] = byDay[e.iso] || []).push(e); });
+  const days = Object.keys(byDay).sort();
+  // 주마다 야간이 있었는지 → 근무주/휴무주 표시
+  const weekHasNight = {};
+  const monOf = (d) => toISO(addDays(d, -((d.getDay() + 6) % 7)));
+  historyLog.forEach(e => { if (e.type === 'night') weekHasNight[monOf(new Date(e.iso + "T00:00:00"))] = true; });
+  return days.map(iso => {
+    const es = byDay[iso];
+    const date = new Date(iso + "T00:00:00");
+    const dayE = es.filter(e => e.type === 'day');
+    const nightE = es.filter(e => e.type === 'night').sort((a, b) => a.team - b.team);
+    const extraE = es.filter(e => e.type === 'extra').sort((a, b) => (a.slot || 0) - (b.slot || 0));
+    const hol = holidays.find(h => h.date === iso);
+    return {
+      date, iso, weekday: date.getDay(),
+      isWorkWeek: !!weekHasNight[monOf(date)],
+      holidayToday: isHoliday(iso, date), holidayLabel: hol ? hol.label : "",
+      dayDuty: dayE.map(e => e.personId), dayLabel: dayE.length ? (dayE[0].dayKind || "06–18시") : "",
+      nightDuty: nightE.map(e => e.personId), extra: extraE.map(e => e.personId)
+    };
+  });
+}
+function renderPast() {
+  if (pastYear === null) {
+    const last = historyLog.reduce((m, e) => (e.iso > m ? e.iso : m), "");
+    const d = last ? new Date(last + "T00:00:00") : new Date();
+    pastYear = d.getFullYear(); pastMonth = d.getMonth();
+  }
+  document.getElementById("pastLabel").textContent = `${pastYear}년 ${pastMonth + 1}월`;
+  const rows = historyRowsForMonth(pastYear, pastMonth);
+  const host = document.getElementById("pastHost");
+  host.innerHTML = rows.length
+    ? gridHTML(allNamesMap(), rows)
+    : `<div class="role-note" style="text-align:center;padding:24px 0;">${historyLog.length ? "이 달에는 저장된 기록이 없어요." : "아직 저장된 기록이 없어요.<br>근무표를 만들고 \"기록에 저장\"을 누르면 여기서 볼 수 있어요."}</div>`;
+  applyPastSearch(false);
+}
+// 검색한 사람의 이 달 야간 강도 (힘든 02–06시 비율, 달 평균과 비교)
+function pastHardnessHTML(q) {
+  const prefix = `${pastYear}-${String(pastMonth + 1).padStart(2, "0")}`;
+  const stat = {};
+  historyLog.forEach(e => {
+    if (!e.iso.startsWith(prefix) || (e.type !== 'night' && e.type !== 'extra')) return;
+    const st = stat[e.personId] = stat[e.personId] || { hard: 0, easy: 0 };
+    if (e.type === 'night' && e.team >= 3) st.hard++; else st.easy++;
+  });
+  const ratio = (st) => st.hard / (st.hard + st.easy);
+  const ids = Object.keys(stat).map(Number);
+  const avg = ids.length ? ids.reduce((a, id) => a + ratio(stat[id]), 0) / ids.length : 0;
+  const names = allNamesMap();
+  const hits = ids.filter(id => String(names[id]).toLowerCase().includes(q));
+  if (!hits.length) return "이 달에는 이 사람의 야간 기록이 없어요.";
+  return hits.slice(0, 4).map(id => {
+    const st = stat[id], r = ratio(st);
+    const diff = Math.round((r - avg) * 100);
+    const tone = diff >= 10 ? "hi" : diff <= -10 ? "lo" : "mid";
+    const word = diff >= 10 ? `평균보다 ${diff}%p 힘들었어요` : diff <= -10 ? `평균보다 ${-diff}%p 편했어요` : "평균과 비슷해요";
+    return `<div class="hard-line"><b>${names[id]}</b> 힘든 02–06시 <b>${st.hard}</b>회 · 22–02시+연장 ${st.easy}회 · 힘든 비율 <b>${Math.round(r * 100)}%</b> <span class="hard-tag ${tone}">${word} (평균 ${Math.round(avg * 100)}%)</span></div>`;
+  }).join("");
+}
+function applyPastSearch(scroll) {
+  const q = document.getElementById("pastSearch").value.trim().toLowerCase();
+  const spans = document.querySelectorAll("#pastHost .team");
+  let n = 0;
+  spans.forEach(el => {
+    const m = q.length > 0 && el.textContent.toLowerCase().includes(q);
+    el.classList.toggle("search-match", m);
+    if (m) n++;
+  });
+  document.getElementById("pastSearchInfo").innerHTML = q ? pastHardnessHTML(q) : "";
+  if (q && scroll) {
+    const first = document.querySelector("#pastHost .team.search-match");
+    if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+document.getElementById("pastSearch").addEventListener("input", () => applyPastSearch(true));
+document.getElementById("pastSearchClear").addEventListener("click", () => { document.getElementById("pastSearch").value = ""; applyPastSearch(false); });
+function shiftPastMonth(delta) {
+  if (pastYear === null) renderPast();
+  pastMonth += delta;
+  if (pastMonth < 0) { pastMonth = 11; pastYear--; }
+  if (pastMonth > 11) { pastMonth = 0; pastYear++; }
+  renderPast();
+}
+document.getElementById("pastPrev").addEventListener("click", () => shiftPastMonth(-1));
+document.getElementById("pastNext").addEventListener("click", () => shiftPastMonth(1));
+function setScheduleMode(mode) {
+  document.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  document.getElementById("makeMode").style.display = mode === "make" ? "" : "none";
+  document.getElementById("pastMode").style.display = mode === "past" ? "" : "none";
+  if (mode === "past") { pastYear = null; renderPast(); }
+}
+document.querySelectorAll(".seg-btn").forEach(b => b.addEventListener("click", () => setScheduleMode(b.dataset.mode)));
+
+// ---- 하단 탭 이동 ----
+function goView(name) {
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.dataset.view === name));
+  document.querySelectorAll(".tabbar .nav-btn").forEach(b => b.classList.toggle("active", b.dataset.go === name));
+  if (name === "fairness") {
+    const has = historyLog.length > 0;
+    document.getElementById("fairnessEmpty").style.display = has ? "none" : "block";
+    if (has) renderFairness(); else document.getElementById("fairnessPanel").style.display = "none";
+  }
+  if (name === "settings" && typeof renderSavedRanges === "function") renderSavedRanges();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".tabbar .nav-btn").forEach(b => b.addEventListener("click", () => goView(b.dataset.go)));
+
+document.getElementById("gen").addEventListener("click", generateSchedule);
+
+// ---- 근무표 이름 검색 (재생성 없이 바로 표시) ----
+function applyScheduleSearch() {
+  const q = document.getElementById("scheduleSearch").value.trim().toLowerCase();
+  const spans = document.querySelectorAll("#tableHost .team");
+  spans.forEach(el => {
+    const match = q.length > 0 && el.textContent.toLowerCase().includes(q);
+    el.classList.toggle("search-match", match);
+  });
+  if (q.length > 0) {
+    const first = document.querySelector("#tableHost .team.search-match");
+    if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+document.getElementById("scheduleSearch").addEventListener("input", applyScheduleSearch);
+document.getElementById("clearSearch").addEventListener("click", () => {
+  document.getElementById("scheduleSearch").value = "";
+  applyScheduleSearch();
+});
+</script>
+<div class="toast-host" id="toastHost" aria-live="polite"></div>
+<div class="dlg-back" id="dlgBack" role="dialog" aria-modal="true">
+  <div class="dlg"><p id="dlgMsg"></p><div class="row"><button class="secondary" id="dlgNo">취소</button><button id="dlgOk">확인</button></div></div>
+</div>
+</body>
+</html>
